@@ -16,6 +16,28 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Supabase authentication
+
+Dashboard pages under `/dashboard` require a valid Supabase Auth session. The
+request proxy refreshes Supabase cookies and redirects signed-out visitors to
+`/login`; the dashboard layout also verifies the session before rendering.
+
+1. Create or open a project in Supabase.
+2. Copy `.env.example` to `.env.local`.
+3. In the Supabase project settings, copy the **Project URL** and **publishable
+   key** into `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local`.
+4. Add the same two environment variables in Vercel under **Project Settings →
+   Environment Variables**, for each environment you deploy.
+5. Restart the local development server or redeploy on Vercel after adding the
+   variables.
+
+Only use the Supabase publishable key in these `NEXT_PUBLIC_` variables. Never
+put a Supabase secret or service-role key in browser-visible configuration.
+The login form uses email and password. Until account creation is connected,
+add test users in **Supabase → Authentication → Users**. The signup and Google
+sign-in screens remain preview flows and do not grant dashboard access.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

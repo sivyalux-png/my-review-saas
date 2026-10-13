@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 const inputClassName =
@@ -8,17 +7,21 @@ const inputClassName =
 const labelClassName = "block text-[11px] font-medium text-zinc-300";
 
 export default function SignupOnboarding() {
-  const router = useRouter();
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
+  const [message, setMessage] = useState("");
 
   function handleManualSignup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.push("/dashboard");
+    setMessage(
+      "Account creation is not connected yet. Sign in with an account that has been added in Supabase Auth.",
+    );
   }
 
   function handleGoogleLicenseSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.push("/dashboard");
+    setMessage(
+      "Google sign-in and AppSumo license activation are not connected. No account or license was created.",
+    );
   }
 
   return (
@@ -101,6 +104,10 @@ export default function SignupOnboarding() {
         </button>
       </form>
 
+      <p aria-live="polite" className="mt-4 min-h-5 text-[11px] leading-5 text-amber-200" role="status">
+        {message}
+      </p>
+
       <p className="mt-5 rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-[10px] leading-5 text-amber-100/80" role="note">
         Preview flow: authentication and AppSumo license activation are not connected yet. Do not enter real account credentials or license codes.
       </p>
@@ -153,6 +160,9 @@ export default function SignupOnboarding() {
               >
                 Activate &amp; Go to Dashboard
               </button>
+              <p aria-live="polite" className="mt-3 text-[11px] leading-5 text-amber-200" role="status">
+                {message}
+              </p>
             </form>
             <p className="mt-4 text-[10px] leading-5 text-zinc-500">
               Preview only. Google sign-in and license activation are not connected yet.

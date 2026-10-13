@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { createClient } from "../../lib/supabase/client";
 
 type AuthFormProps = {
   mode: "login" | "signup";
@@ -12,11 +14,45 @@ const labelClassName = "block text-[11px] font-medium text-[#d9d8cf]";
 
 export default function AuthForm({ mode }: AuthFormProps) {
   const isSignup = mode === "signup";
+  const router = useRouter();
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("Authentication is not connected yet. Your details have not been sent.");
+    setIsSubmitting(true);
+    setMessage("");
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: String(formData.get("email")),
+        password: String(formData.get("password")),
+      });
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      const next = new URLSearchParams(window.location.search).get("next");
+      const target = next ? new URL(next, window.location.origin) : null;
+      const destination =
+        target?.origin === window.location.origin
+          ? `${target.pathname}${target.search}${target.hash}`
+          : "/dashboard";
+      router.replace(destination);
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to sign in. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -64,8 +100,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
             <a className="text-[11px] text-[#c7f36b] transition-colors hover:text-[#e0ffa3]" href="mailto:hello@tablesignal.com?subject=Password%20reset%20help">Forgot password?</a>
           </div>
         )}
-        <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[5px] bg-[#c7f36b] px-5 text-[13px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c7f36b]" type="submit">
-          {isSignup ? "Create your account" : "Sign in"}
+        <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[5px] bg-[#c7f36b] px-5 text-[13px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c7f36b] disabled:cursor-wait disabled:opacity-60" disabled={isSubmitting} type="submit">
+          {isSubmitting ? "Signing in..." : isSignup ? "Create your account" : "Sign in"}
           <span aria-hidden="true">↗</span>
         </button>
         <p aria-live="polite" className="min-h-4 text-[11px] leading-5 text-[#edbd65]" role="status">{message}</p>
