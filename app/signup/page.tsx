@@ -7,7 +7,19 @@ export const metadata: Metadata = {
   description: "Create a TableSignal workspace for your local business and bring every review into one place.",
 };
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const initialError =
+    error === "license"
+      ? "We couldn't activate that license. Check the key or contact support."
+      : error === "confirmation"
+        ? "The confirmation link is invalid or expired. Please request a new link or contact support."
+        : undefined;
+
   return (
     <main className="hero-grid relative min-h-screen overflow-hidden bg-[#09090b] text-zinc-100">
       <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
@@ -38,7 +50,7 @@ export default function SignupPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-300">GET STARTED</p>
           <h2 className="mt-3 text-[28px] font-semibold leading-tight tracking-[-0.05em]" id="signup-heading">Create your account</h2>
           <p className="mt-2 mb-6 text-[12px] leading-6 text-zinc-400">Choose how you’d like to get started and activate your AppSumo lifetime deal.</p>
-          <SignupOnboarding />
+          <SignupOnboarding initialError={initialError} />
           <p className="mt-5 text-center text-[11px] text-zinc-500">
             Already have an account?{" "}
             <Link className="font-medium text-indigo-300 transition-colors hover:text-indigo-200" href="/login">Sign in</Link>
