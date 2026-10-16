@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 export function normalizeLicenseKey(key: string) {
   return key.trim().toUpperCase();
@@ -18,6 +18,15 @@ export function hashLicenseKey(key: string) {
   return createHmac("sha256", secret)
     .update(normalizeLicenseKey(key), "utf8")
     .digest("hex");
+}
+
+export function getLicenseKeyHashes(key: string) {
+  const normalizedKey = normalizeLicenseKey(key);
+
+  return [
+    hashLicenseKey(normalizedKey),
+    createHash("sha256").update(normalizedKey, "utf8").digest("hex"),
+  ];
 }
 
 export const pendingLicenseCookieName = "pending_license_hash";

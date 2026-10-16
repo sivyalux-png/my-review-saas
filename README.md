@@ -60,13 +60,15 @@ and `settings`, enables row-level security, and automatically creates profiles
 for new Supabase Auth users.
 
 Signup accepts only a key already present in `licenses` with `status = 'available'`
-and a non-expired expiry date. Keys are normalized to uppercase and stored as
-server-generated HMAC-SHA-256 hashes, never plaintext. To create a disposable
-test key, run `npm run license:create-test`; copy the one-time key printed by
-the command and use it in signup. Adding real AppSumo keys still requires a
-trusted server-side import/integration. The `licenses` table intentionally has
-no access policy for signed-in clients; only the restricted redemption
-function and trusted server-side code can access license records.
+and a non-expired expiry date. Keys are normalized to uppercase, then checked
+against both HMAC-SHA-256 hashes (used for newly generated keys) and plain
+SHA-256 hashes (for compatible existing imports); plaintext keys are never
+stored. To create a disposable test key, run `npm run license:create-test`;
+copy the one-time key printed by the command and use it in signup. Adding real
+AppSumo keys still requires a trusted server-side import/integration. The
+`licenses` table intentionally has no access policy for signed-in clients; only
+the restricted redemption function and trusted server-side code can access
+license records.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "../../lib/supabase/admin";
 import { getSupabaseConfig } from "../../lib/supabase/config";
 import {
-  hashLicenseKey,
+  getLicenseKeyHashes,
   normalizeLicenseKey,
   pendingLicenseCookieName,
 } from "../../lib/supabase/licenses";
@@ -43,10 +43,10 @@ export async function signUp(
     return { error: "Check your details and enter a valid license key." };
   }
 
-  let licenseHash: string;
+  let licenseHashes: string[];
   let admin: ReturnType<typeof createAdminClient>;
   try {
-    licenseHash = hashLicenseKey(licenseKey);
+    licenseHashes = getLicenseKeyHashes(licenseKey);
     admin = createAdminClient();
   } catch (error) {
     console.error("Signup license service is not configured.", error);
@@ -54,8 +54,8 @@ export async function signUp(
   }
   const { data: license, error: licenseLookupError } = await admin
     .from("licenses")
-    .select("id, expires_at")
-    .eq("key_hash", licenseHash)
+    .select("key_hash, expires_at")
+    .in("key_hash", licenseHashes)
     .eq("status", "available")
     .maybeSingle();
 
@@ -72,6 +72,7 @@ export async function signUp(
     return { error: "This license key is invalid, expired, or already redeemed." };
   }
 
+  const licenseHash = license.key_hash;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let callbackUrl: string;
 
