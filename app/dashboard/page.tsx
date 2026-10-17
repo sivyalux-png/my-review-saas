@@ -128,10 +128,10 @@ export default function DashboardPage() {
                         <span aria-label={`${review.rating} out of 5 stars`} className="shrink-0 text-[10px] tracking-[0.08em] text-[#edbd65]">{"★".repeat(review.rating)}<span className="text-[#51524a]">{"★".repeat(5 - review.rating)}</span></span>
                       </div>
                       <p className="mt-3 text-[11px] leading-5 text-[#b9b8ae]">{review.review}</p>
-                      <div className="mt-3 rounded-[4px] border border-[#c7f36b]/15 bg-[#c7f36b]/[0.035] p-3">
-                        <div className="flex items-center justify-between gap-3"><p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#c7f36b]">AI reply suggestion</p><span className="text-[9px] text-[#77786e]">Review before posting</span></div>
-                        <p className="mt-2 text-[10px] leading-[1.65] text-[#b7b8a7]">{review.reply}</p>
-                        <button className="mt-2.5 inline-flex items-center gap-1.5 text-[9px] font-medium text-[#deddd3] transition-colors hover:text-[#c7f36b]" onClick={() => void copyReply(review.id, review.reply)} type="button">{copiedReply === review.id ? "Copied reply" : "Copy reply"}<span aria-hidden="true">↗</span></button>
+                      <div className="mt-3 rounded-xl border border-white/70 bg-white/50 p-3 text-slate-800 shadow-sm backdrop-blur-md">
+                        <div className="flex items-center justify-between gap-3"><p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-700">AI reply suggestion</p><span className="text-[9px] text-slate-600">Review before posting</span></div>
+                        <p className="mt-2 text-[10px] leading-[1.65] text-slate-800">{review.reply}</p>
+                        <button className="mt-2.5 inline-flex items-center gap-1.5 text-[9px] font-semibold text-violet-700 transition-colors hover:text-violet-900" onClick={() => void copyReply(review.id, review.reply)} type="button">{copiedReply === review.id ? "Copied reply" : "Copy reply"}<span aria-hidden="true">↗</span></button>
                       </div>
                     </article>
                   ))}
@@ -145,7 +145,7 @@ export default function DashboardPage() {
                   <div><p className="text-[24px] font-medium tracking-[-0.05em] text-[#f3f2e9]">2.4<span className="ml-1 text-[11px] text-[#aaa99f]">hrs</span></p><p className="mt-1 text-[9px] text-[#85857c]">Avg. response time</p></div>
                 </div>
                 <div aria-label="Weekly review activity chart" className="mt-5 flex h-[116px] items-end gap-1.5 border-b border-l border-white/[0.1] px-2">
-                  {activityBars.map((height, index) => <span className="flex-1 rounded-t-[2px] bg-gradient-to-t from-[#c7f36b]/20 to-[#c7f36b]/75" key={index} style={{ height: `${height}%` }} />)}
+                  {activityBars.map((height, index) => <span className="flex-1 rounded-t-[3px] bg-gradient-to-t from-violet-500/35 via-violet-500/65 to-indigo-400/90 shadow-[0_0_12px_rgba(139,92,246,0.16)]" key={index} style={{ height: `${height}%` }} />)}
                 </div>
                 <div className="mt-2 flex justify-between pl-2 text-[8px] text-[#77786e]"><span>Week 1</span><span>Week 12</span></div>
                 <div className="mt-5 flex items-center justify-between border-t border-white/[0.08] pt-4"><span className="text-[10px] text-[#a5a49a]">Reviews needing attention</span><span className="text-[11px] font-medium text-[#edbd65]">6 <span className="text-[#77786e]">open</span></span></div>

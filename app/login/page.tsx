@@ -32,7 +32,7 @@ export default function LoginPage() {
           </div>
         </aside>
 
-        <section aria-labelledby="login-heading" className="mx-auto w-full max-w-[420px]">
+        <section aria-labelledby="login-heading" className="login-glass-panel mx-auto w-full max-w-[420px]">
           <p className="section-kicker"><span>WELCOME BACK</span></p>
           <h2 className="mt-4 text-[32px] font-medium leading-tight tracking-[-0.05em]" id="login-heading">Sign in to TableSignal</h2>
           <p className="mt-2 mb-8 text-[13px] leading-6 text-[#929188]">Pick up where your team left off.</p>

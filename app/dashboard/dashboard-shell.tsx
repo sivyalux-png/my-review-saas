@@ -20,7 +20,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const activePage = navigation.find(({ href }) => isActivePath(pathname, href));
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100">
+    <div className="dashboard-shell min-h-screen bg-[#09090b] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-zinc-800 bg-[#0d0d10] px-4 py-5 lg:flex">
         <Link aria-label="TableSignal home" className="mb-9 flex items-center gap-3 px-2" href="/">
           <span aria-hidden="true" className="brand-mark"><span /><span /><span /></span>
