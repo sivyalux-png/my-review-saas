@@ -79,6 +79,11 @@ used to verify a key. Credit balances are initialized and upgraded with the
 license entitlement. Usage metering and automated monthly credit resets are not
 implemented yet.
 
+The dashboard overview reads the signed-in user's plan and credit balance from
+their profile. Review totals and request totals show empty states until the
+application has persistent review and request activity records; the current
+request queue is held only in page-session state.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

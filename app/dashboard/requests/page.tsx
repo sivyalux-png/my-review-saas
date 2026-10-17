@@ -62,7 +62,7 @@ function readFileWithProgress(file: File, onProgress: (progress: number) => void
 }
 
 export default function RequestsPage() {
-  const [requestsSent, setRequestsSent] = useState(142);
+  const [requestsSent, setRequestsSent] = useState(0);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
