@@ -19,5 +19,22 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  return <DashboardShell>{children}</DashboardShell>;
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("plan_tier, credits_remaining")
+    .eq("id", data.claims.sub)
+    .maybeSingle();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  return (
+    <DashboardShell
+      creditsRemaining={profile?.credits_remaining ?? null}
+      planTier={profile?.plan_tier ?? null}
+    >
+      {children}
+    </DashboardShell>
+  );
 }

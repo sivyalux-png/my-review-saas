@@ -15,7 +15,15 @@ function isActivePath(pathname: string, href: string) {
   return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 }
 
-export default function DashboardShell({ children }: { children: ReactNode }) {
+export default function DashboardShell({
+  children,
+  planTier,
+  creditsRemaining,
+}: {
+  children: ReactNode;
+  planTier: string | null;
+  creditsRemaining: number | null;
+}) {
   const pathname = usePathname();
   const activePage = navigation.find(({ href }) => isActivePath(pathname, href));
 
@@ -65,6 +73,11 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="hidden text-[11px] text-zinc-500 lg:block">Northstar Health <span className="mx-1 text-zinc-700">/</span> {activePage?.label ?? "Workspace"}</div>
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
+            <span className="hidden rounded-full border border-violet-300/50 bg-white/55 px-3 py-1.5 text-[10px] font-medium text-violet-800 sm:inline">
+              {planTier
+                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} credits`
+                : "No active plan"}
+            </span>
             <span className="hidden text-[10px] text-zinc-500 sm:inline">Northstar Health · 3 locations</span>
             <button aria-label="Account: Maya Lewis" className="flex size-8 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/10 text-[10px] font-semibold text-emerald-300" type="button">ML</button>
           </div>

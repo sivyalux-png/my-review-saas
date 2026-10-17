@@ -55,9 +55,13 @@ The initial database schema is in
 After applying that initial schema, also run
 [`supabase/migrations/02_redeem_licenses.sql`](./supabase/migrations/02_redeem_licenses.sql)
 in your project's **SQL Editor**. It adds the atomic, authenticated
-`redeem_license` function. The first migration creates `profiles`, `licenses`,
-and `settings`, enables row-level security, and automatically creates profiles
-for new Supabase Auth users.
+`redeem_license` function. Then run
+[`supabase/migrations/03_license_entitlements.sql`](./supabase/migrations/03_license_entitlements.sql)
+to add persisted plan and credit balances to profiles and update the redemption
+function. It maps Tier 1 to 500, Tier 2 to 2,000, and Tier 3 to 10,000 monthly
+credits; existing redeemed licenses are backfilled. The first migration creates
+`profiles`, `licenses`, and `settings`, enables row-level security, and
+automatically creates profiles for new Supabase Auth users.
 
 Signup accepts only a key already present in `licenses` with `status = 'available'`
 and a non-expired expiry date. Keys are normalized to uppercase, then checked
@@ -69,6 +73,11 @@ AppSumo keys still requires a trusted server-side import/integration. The
 `licenses` table intentionally has no access policy for signed-in clients; only
 the restricted redemption function and trusted server-side code can access
 license records.
+The Plan & credits form hashes the complete license key server-side and redeems
+it through the authenticated RPC; `key_last4` is display metadata and is never
+used to verify a key. Credit balances are initialized and upgraded with the
+license entitlement. Usage metering and automated monthly credit resets are not
+implemented yet.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
