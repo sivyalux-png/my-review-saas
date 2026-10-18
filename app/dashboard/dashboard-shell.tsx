@@ -19,10 +19,12 @@ export default function DashboardShell({
   children,
   planTier,
   creditsRemaining,
+  smsCreditsRemaining,
 }: {
   children: ReactNode;
   planTier: string | null;
   creditsRemaining: number | null;
+  smsCreditsRemaining: number;
 }) {
   const pathname = usePathname();
   const activePage = navigation.find(({ href }) => isActivePath(pathname, href));
@@ -75,7 +77,7 @@ export default function DashboardShell({
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
             <span className="hidden rounded-full border border-violet-300/50 bg-white/55 px-3 py-1.5 text-[10px] font-medium text-violet-800 sm:inline">
               {planTier
-                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} credits`
+                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} email${smsCreditsRemaining > 0 ? ` · ${smsCreditsRemaining.toLocaleString()} SMS` : ""}`
                 : "No active plan"}
             </span>
             <span className="hidden text-[10px] text-zinc-500 sm:inline">Northstar Health · 3 locations</span>

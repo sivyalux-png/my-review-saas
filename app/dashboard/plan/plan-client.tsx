@@ -3,11 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { redeemLicenseKey } from "./actions";
+import { appSumoTiers, getTierEntitlement } from "../../../lib/entitlements";
 
 type PlanEntitlement = {
   plan_tier: string | null;
   monthly_credit_limit: number | null;
   credits_remaining: number | null;
+  sms_credit_limit: number | null;
+  sms_credits_remaining: number | null;
 };
 
 const creditPacks = [
@@ -16,11 +19,14 @@ const creditPacks = [
   { credits: 5000, price: 69, label: "Best value", checkoutUrl: process.env.NEXT_PUBLIC_PAYONEER_5000_CREDITS_URL },
 ];
 
-const tiers = [
-  { name: "Starter", price: "$19", credits: "500", locations: "1 location", features: ["500 monthly credits", "AI review replies", "Review request tools"] },
-  { name: "Plus", price: "$49", credits: "2,000", locations: "3 locations", features: ["2,000 monthly credits", "AI review replies", "Review request tools"] },
-  { name: "Unlimited", price: "$99", credits: "10,000", locations: "10 locations", features: ["10,000 monthly credits", "AI review replies", "Priority support"] },
-];
+const tiers = appSumoTiers.map((tier) => ({
+  name: tier.name,
+  price: `$${tier.price}`,
+  emailCredits: tier.emailCredits.toLocaleString(),
+  smsCredits: tier.smsCredits,
+  locations: tier.locations,
+  channels: tier.channels.join(", "),
+}));
 
 export default function PlanPage({
   initialEntitlement,
@@ -36,8 +42,10 @@ export default function PlanPage({
 
   const monthlyCreditLimit = entitlement?.monthly_credit_limit ?? 0;
   const creditsRemaining = entitlement?.credits_remaining ?? 0;
+  const smsCreditLimit = entitlement?.sms_credit_limit ?? 0;
+  const smsCreditsRemaining = entitlement?.sms_credits_remaining ?? 0;
   const creditsUsed = Math.max(monthlyCreditLimit - creditsRemaining, 0);
-  const currentTier = tiers.find((tier) => tier.name === entitlement?.plan_tier);
+  const currentTier = getTierEntitlement(entitlement?.plan_tier);
   const usagePercent = monthlyCreditLimit > 0
     ? Math.min((creditsUsed / monthlyCreditLimit) * 100, 100)
     : 0;
@@ -65,6 +73,8 @@ export default function PlanPage({
             plan_tier: result.entitlement.planTier,
             monthly_credit_limit: result.entitlement.monthlyCreditLimit,
             credits_remaining: result.entitlement.creditsRemaining,
+            sms_credit_limit: result.entitlement.smsCreditLimit,
+            sms_credits_remaining: result.entitlement.smsCreditsRemaining,
           });
           setLicenseKey("");
           router.refresh();
@@ -83,7 +93,7 @@ export default function PlanPage({
               <div>
                 <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#929188]">Account billing</p>
                 <h1 className="mt-2 text-[28px] font-medium leading-tight sm:text-[32px]">Plan &amp; credits</h1>
-                <p className="mt-2 text-[12px] text-[#929188]">Manage your AppSumo license and monthly usage.</p>
+                <p className="mt-2 text-[12px] text-[#929188]">Manage your AppSumo lifetime license and channel credit grants.</p>
               </div>
               <span className="inline-flex w-fit items-center gap-2 rounded-[4px] border border-[#c7f36b]/20 bg-[#c7f36b]/[0.06] px-3 py-2 text-[10px] text-[#dff7b2]"><span aria-hidden="true" className="size-1.5 rounded-full bg-[#c7f36b]" /> Account active</span>
             </section>
@@ -93,17 +103,17 @@ export default function PlanPage({
                 <div>
                   <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#c7f36b]">Current plan</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2.5"><h2 className="text-[19px] font-medium" id="tier-status-heading">{entitlement?.plan_tier ?? "No active plan"}</h2>{entitlement && <span className="rounded-[3px] border border-[#c7f36b]/25 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-[#c7f36b]">Lifetime</span>}</div>
-                  <p className="mt-1 text-[10px] text-[#85857c]">{currentTier?.locations ?? "No locations"} <span className="mx-1 text-[#55564f]">·</span> Renews never</p>
+                  <p className="mt-1 text-[10px] text-[#85857c]">{currentTier?.locations ?? "No locations"} <span className="mx-1 text-[#55564f]">·</span> Lifetime license</p>
                 </div>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
-                  <div><p className="text-[9px] text-[#85857c]">Credits used</p><p className="mt-1 text-[15px] font-medium">{creditsUsed.toLocaleString()} <span className="text-[10px] font-normal text-[#85857c]">/ {monthlyCreditLimit.toLocaleString()}</span></p></div>
-                  <div><p className="text-[9px] text-[#85857c]">Available</p><p className="mt-1 text-[15px] font-medium text-[#c7f36b]">{creditsRemaining.toLocaleString()} <span className="text-[10px] font-normal text-[#85857c]">credits</span></p></div>
-                  <div className="col-span-2 sm:col-span-1"><p className="text-[9px] text-[#85857c]">Monthly allowance</p><p className="mt-1 text-[12px] font-medium">{monthlyCreditLimit.toLocaleString()} credits</p></div>
+                  <div><p className="text-[9px] text-[#85857c]">Email credits used</p><p className="mt-1 text-[15px] font-medium">{creditsUsed.toLocaleString()} <span className="text-[10px] font-normal text-[#85857c]">/ {monthlyCreditLimit.toLocaleString()}</span></p></div>
+                  <div><p className="text-[9px] text-[#85857c]">Email credits available</p><p className="mt-1 text-[15px] font-medium text-[#c7f36b]">{creditsRemaining.toLocaleString()}</p></div>
+                  <div className="col-span-2 sm:col-span-1"><p className="text-[9px] text-[#85857c]">SMS / WhatsApp</p><p className="mt-1 text-[12px] font-medium">{smsCreditsRemaining.toLocaleString()} <span className="text-[10px] font-normal text-[#85857c]">/ {smsCreditLimit.toLocaleString()} credits</span></p></div>
                 </div>
               </div>
               <div className="border-t border-white/[0.07] px-4 py-3 sm:px-5">
-                <div className="mb-2 flex justify-between text-[9px] text-[#85857c]"><span>Monthly credit usage</span><span>{Math.round(usagePercent)}%</span></div>
-                <div aria-label={`${Math.round(usagePercent)} percent of monthly credits used`} aria-valuemax={monthlyCreditLimit} aria-valuemin={0} aria-valuenow={creditsUsed} className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar"><div className="h-full rounded-full bg-[#c7f36b] transition-[width]" style={{ width: `${usagePercent}%` }} /></div>
+                <div className="mb-2 flex justify-between text-[9px] text-[#85857c]"><span>Lifetime email credit usage</span><span>{Math.round(usagePercent)}%</span></div>
+                <div aria-label={`${Math.round(usagePercent)} percent of initial email credits used`} aria-valuemax={monthlyCreditLimit} aria-valuemin={0} aria-valuenow={creditsUsed} className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar"><div className="h-full rounded-full bg-[#c7f36b] transition-[width]" style={{ width: `${usagePercent}%` }} /></div>
               </div>
             </section>
 
@@ -154,11 +164,12 @@ export default function PlanPage({
                   return (
                     <article className={`rounded-[6px] border p-4 sm:p-5 ${isCurrent ? "border-[#c7f36b]/35 bg-[#171914]" : "border-white/[0.09] bg-[#171814]"}`} key={tier.name}>
                       <div className="flex items-start justify-between gap-2"><h3 className="text-[13px] font-medium">{tier.name}</h3>{isCurrent && <span className="rounded-[3px] bg-[#c7f36b]/10 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-[#c7f36b]">Current</span>}</div>
-                      <p className="mt-3 text-[23px] font-medium">{tier.price}<span className="ml-1 text-[9px] font-normal text-[#85857c]">/ month</span></p>
+                      <p className="mt-3 text-[23px] font-medium">{tier.price}<span className="ml-1 text-[9px] font-normal text-[#85857c]">/ lifetime</span></p>
                       <div className="mt-4 space-y-2 border-t border-white/[0.08] pt-4 text-[10px] text-[#b9b8ae]">
-                        <p><span className="font-medium text-[#f3f2e9]">{tier.credits}</span> credits / month</p>
+                        <p><span className="font-medium text-[#f3f2e9]">{tier.emailCredits}</span> email credits, initial grant</p>
+                        <p><span className="font-medium text-[#f3f2e9]">{tier.smsCredits.toLocaleString()}</span> SMS / WhatsApp credits, initial grant</p>
                         <p>{tier.locations}</p>
-                        {tier.features.slice(1).map((feature) => <p className="flex items-center gap-2" key={feature}><span aria-hidden="true" className="text-[#c7f36b]">✓</span>{feature}</p>)}
+                        <p>Channels: {tier.channels}</p>
                       </div>
                       {isCurrent ? <p className="mt-5 text-[9px] text-[#85857c]">Included with your AppSumo license</p> : <a className="mt-5 inline-flex h-9 w-full items-center justify-center gap-2 rounded-[4px] border border-white/[0.12] text-[9px] font-medium text-[#deddd3] transition-colors hover:border-[#c7f36b]/40 hover:text-[#c7f36b]" href={`mailto:hello@tablesignal.com?subject=${encodeURIComponent(`Upgrade to ${tier.name}`)}`}>Explore {tier.name} <span aria-hidden="true">→</span></a>}
                     </article>

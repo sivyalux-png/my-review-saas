@@ -136,35 +136,39 @@ export default function Home() {
           </div>
           <div className="mt-12 grid gap-4 lg:grid-cols-3">
             <article className="flex flex-col rounded-[6px] border border-white/[0.1] bg-[#10110f] p-6 sm:p-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#aaa99f]">Tier 1 · Starter</p>
-              <p className="mt-5 text-[42px] font-medium leading-none tracking-[-0.06em]">$49<span className="ml-2 text-[12px] font-normal tracking-normal text-[#929188]">/ lifetime</span></p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#aaa99f]">Tier 1</p>
+              <p className="mt-5 text-[42px] font-medium leading-none tracking-[-0.06em]">$69<span className="ml-2 text-[12px] font-normal tracking-normal text-[#929188]">/ lifetime</span></p>
               <p className="mt-3 text-[11px] text-[#c7f36b]">Pay Once, Own Forever</p>
               <ul className="mt-7 flex-1 space-y-3 border-t border-white/[0.09] pt-6 text-[12px] text-[#cfcec4]">
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 1 business location</li>
-                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 500 emails per month</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 1,000 initial email credits</li>
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Basic star routing</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Email channel</li>
               </ul>
               <a href="/signup" className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-[4px] border border-white/[0.16] text-[12px] font-semibold text-[#f3f2e9] transition-colors hover:border-[#c7f36b]/50 hover:text-[#c7f36b]">Acquire Deal <span aria-hidden="true">↗</span></a>
             </article>
             <article className="relative flex flex-col rounded-[6px] border border-[#c7f36b]/45 bg-[#191c14] p-6 sm:p-7">
               <span className="absolute right-5 top-5 rounded-[3px] bg-[#c7f36b] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.1em] text-[#171a11]">Popular</span>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#c7f36b]">Tier 2 · Plus</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#c7f36b]">Tier 2</p>
               <p className="mt-5 text-[42px] font-medium leading-none tracking-[-0.06em]">$99<span className="ml-2 text-[12px] font-normal tracking-normal text-[#929188]">/ lifetime</span></p>
               <p className="mt-3 text-[11px] text-[#c7f36b]">Pay Once, Own Forever</p>
               <ul className="mt-7 flex-1 space-y-3 border-t border-white/[0.09] pt-6 text-[12px] text-[#cfcec4]">
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 3 business locations</li>
-                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 2,000 emails per month</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 5,000 initial email credits</li>
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Custom branding</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Email channel</li>
               </ul>
               <a href="/signup" className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-[4px] bg-[#c7f36b] text-[12px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e]">Acquire Deal <span aria-hidden="true">↗</span></a>
             </article>
             <article className="flex flex-col rounded-[6px] border border-white/[0.1] bg-[#10110f] p-6 sm:p-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#aaa99f]">Tier 3 · Unlimited</p>
-              <p className="mt-5 text-[42px] font-medium leading-none tracking-[-0.06em]">$199<span className="ml-2 text-[12px] font-normal tracking-normal text-[#929188]">/ lifetime</span></p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#aaa99f]">Tier 3</p>
+              <p className="mt-5 text-[42px] font-medium leading-none tracking-[-0.06em]">$189<span className="ml-2 text-[12px] font-normal tracking-normal text-[#929188]">/ lifetime</span></p>
               <p className="mt-3 text-[11px] text-[#c7f36b]">Pay Once, Own Forever</p>
               <ul className="mt-7 flex-1 space-y-3 border-t border-white/[0.09] pt-6 text-[12px] text-[#cfcec4]">
-                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Unlimited locations</li>
-                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 10,000 emails per month</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 10 business locations</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 10,000 initial email credits</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 500 SMS / WhatsApp credits</li>
+                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Email, SMS, and WhatsApp channels</li>
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Priority support</li>
               </ul>
               <a href="/signup" className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-[4px] border border-white/[0.16] text-[12px] font-semibold text-[#f3f2e9] transition-colors hover:border-[#c7f36b]/50 hover:text-[#c7f36b]">Acquire Deal <span aria-hidden="true">↗</span></a>

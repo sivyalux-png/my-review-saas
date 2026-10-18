@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import CreateReviewRequest from "./create-review-request";
 
 type OverviewClientProps = {
   fullName: string | null;
@@ -26,21 +27,22 @@ export default function OverviewClient({
   const [qrValue, setQrValue] = useState(googleReviewLink ?? "");
   const [generatorMessage, setGeneratorMessage] = useState("");
   const monthlyCreditLimit = savedMonthlyCreditLimit ?? 0;
-  const creditsRemaining = savedCreditsRemaining ?? 0;
+  const [creditsRemaining, setCreditsRemaining] = useState(savedCreditsRemaining ?? 0);
   const creditsUsed = Math.max(monthlyCreditLimit - creditsRemaining, 0);
   const greetingName = fullName?.trim().split(/\s+/)[0] || "there";
+
   const metrics = [
     {
       label: "Available Credits",
       value: creditsRemaining.toLocaleString(),
-      detail: `of ${monthlyCreditLimit.toLocaleString()} monthly credits`,
+      detail: `of ${monthlyCreditLimit.toLocaleString()} initial email credits`,
       mark: "◇",
       tone: "text-[#7161f4]",
     },
     {
       label: "Used Credits",
       value: creditsUsed.toLocaleString(),
-      detail: "This monthly allowance",
+      detail: "Email credits used",
       mark: "↗",
       tone: "text-[#7161f4]",
     },
@@ -98,9 +100,12 @@ export default function OverviewClient({
               <div>
                 <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#929188]">Workspace overview</p>
                 <h1 className="mt-2 text-[28px] font-medium leading-tight tracking-[-0.05em] sm:text-[32px]">Welcome, {greetingName}</h1>
-                <p className="mt-2 text-[12px] text-[#929188]">Your plan, credits, and review activity at a glance.</p>
+                <p className="mt-2 text-[12px] text-[#929188]">Your plan, available email credits, and review activity at a glance.</p>
               </div>
-              <a className="inline-flex h-10 w-fit items-center gap-2 rounded-[5px] bg-[#c7f36b] px-4 text-[11px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e]" href="#qr-generator">Create a review request <span aria-hidden="true">↗</span></a>
+              <CreateReviewRequest
+                creditsRemaining={creditsRemaining}
+                onCreditsChanged={setCreditsRemaining}
+              />
             </section>
 
             <section aria-label="Account and activity summary" className="grid grid-cols-2 gap-3 xl:grid-cols-5 xl:gap-4">

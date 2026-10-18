@@ -21,7 +21,7 @@ export default async function DashboardLayout({
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan_tier, credits_remaining")
+    .select("plan_tier, credits_remaining, sms_credits_remaining")
     .eq("id", data.claims.sub)
     .maybeSingle();
 
@@ -33,6 +33,7 @@ export default async function DashboardLayout({
     <DashboardShell
       creditsRemaining={profile?.credits_remaining ?? null}
       planTier={profile?.plan_tier ?? null}
+      smsCreditsRemaining={profile?.sms_credits_remaining ?? 0}
     >
       {children}
     </DashboardShell>

@@ -98,7 +98,7 @@ export async function redeemLicenseKey(licenseKey: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan_tier, monthly_credit_limit, credits_remaining")
+    .select("plan_tier, monthly_credit_limit, credits_remaining, sms_credit_limit, sms_credits_remaining")
     .eq("id", userId)
     .maybeSingle();
 
@@ -118,7 +118,9 @@ export async function redeemLicenseKey(licenseKey: string) {
   if (
     profile.plan_tier === null ||
     profile.monthly_credit_limit === null ||
-    profile.credits_remaining === null
+    profile.credits_remaining === null ||
+    profile.sms_credit_limit === null ||
+    profile.sms_credits_remaining === null
   ) {
     console.error("License redeemed but the profile has incomplete entitlement data.");
     return {
@@ -135,6 +137,8 @@ export async function redeemLicenseKey(licenseKey: string) {
       planTier: profile.plan_tier,
       monthlyCreditLimit: profile.monthly_credit_limit,
       creditsRemaining: profile.credits_remaining,
+      smsCreditLimit: profile.sms_credit_limit,
+      smsCreditsRemaining: profile.sms_credits_remaining,
     },
   };
 }
