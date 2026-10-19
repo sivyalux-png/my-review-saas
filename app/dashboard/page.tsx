@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveBusinessName } from "../../lib/business-name";
 import { createClient } from "../../lib/supabase/server";
 import OverviewClient from "./overview-client";
 
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from("settings")
-      .select("google_review_link")
+      .select("business_name, google_review_link")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -41,7 +42,7 @@ export default async function DashboardPage() {
 
   return (
     <OverviewClient
-      businessName={profile?.business_name ?? null}
+      businessName={resolveBusinessName(settings?.business_name, profile?.business_name)}
       creditsRemaining={profile?.credits_remaining ?? null}
       fullName={profile?.full_name ?? null}
       googleReviewLink={settings?.google_review_link ?? null}

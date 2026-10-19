@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveBusinessName } from "../../../lib/business-name";
 import { createClient } from "../../../lib/supabase/server";
 import SettingsClient, { type ReviewSettings } from "./settings-client";
 
@@ -26,7 +27,7 @@ export default async function SettingsPage() {
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("plan_tier, sms_credit_limit, sms_credits_remaining")
+      .select("business_name, plan_tier, sms_credit_limit, sms_credits_remaining")
       .eq("id", userId)
       .maybeSingle(),
   ]);
@@ -39,7 +40,7 @@ export default async function SettingsPage() {
   }
 
   const initialSettings: Partial<ReviewSettings> = {
-    businessName: settings?.business_name ?? "",
+    businessName: resolveBusinessName(settings?.business_name, profile?.business_name) ?? "",
     googleReviewLink: settings?.google_review_link ?? "",
     privateFeedbackUrl: settings?.private_feedback_url ?? "",
     emailSubject: settings?.email_subject ?? undefined,
