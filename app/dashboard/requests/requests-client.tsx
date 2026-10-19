@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import readExcelFile from "read-excel-file/browser";
@@ -223,61 +224,75 @@ export default function RequestsClient({
   }
 
   return (
-      <div className="mx-auto max-w-[1180px] px-5 pb-12 pt-7 sm:px-8 sm:pt-9 lg:px-10">
-            <section className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#929188]">Customer outreach</p>
-                <h1 className="mt-2 text-[28px] font-medium leading-tight tracking-[-0.05em] sm:text-[32px]">Review requests</h1>
-                <p className="mt-2 text-[12px] text-[#929188]">Invite customers to share feedback after a visit.</p>
+      <div className="requests-page mx-auto max-w-[1180px] px-5 pb-12 pt-7 sm:px-8 sm:pt-9 lg:px-10">
+            <section className="requests-hero mb-5">
+              <p className="requests-eyebrow">Customer outreach</p>
+              <h1>
+                <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+                  <path d="M7.5 10.25 11 5a2 2 0 0 1 3.5 1.75L14 10h3.75a2 2 0 0 1 1.94 2.5l-1.25 5A2 2 0 0 1 16.5 19H9.25a2 2 0 0 1-1.75-1.03M7.5 10.25V18M4 10.25h3.5v8.5H4a1 1 0 0 1-1-1v-6.5a1 1 0 0 1 1-1Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.65" />
+                </svg>
+                Review Requests
+              </h1>
+              <p>Invite customers to share feedback after a visit.</p>
+            </section>
+
+            <section aria-labelledby="usage-heading" className="requests-usage mb-5 rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
+              <div className="requests-usage-top">
+                <h2 id="usage-heading">Usage</h2>
+                <div className="requests-usage-count">
+                  <strong>{requestsSent.toLocaleString()} / {monthlyCreditLimit.toLocaleString()}</strong>
+                  <span><i aria-hidden="true" /> Used</span>
+                </div>
+              </div>
+              <p className="requests-usage-label">Monthly request usage</p>
+              <div aria-label={`${Math.round(usagePercent)} percent of initial email credits used`} className="requests-progress-track" role="progressbar" aria-valuemax={monthlyCreditLimit} aria-valuemin={0} aria-valuenow={requestsSent}>
+                <div className="requests-progress-value transition-[width] duration-500" style={{ width: `${usagePercent}%` }} />
+              </div>
+              <div className="requests-usage-footer">
+                <p>Available Credits: <strong>{remainingRequests.toLocaleString()}</strong><span className="requests-expiry"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.2c0 4.3-2.9 7.5-7 9.3-4.1-1.8-7-5-7-9.3V6l7-2.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="m9 11.5 2 2 4-4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>Credits never expire</span></p>
+                <Link href="/dashboard/plan">Buy extra credits</Link>
               </div>
             </section>
 
-            <section aria-labelledby="usage-heading" className="mb-6 rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-medium text-[#a5a49a]" id="usage-heading">Monthly request usage</p>
-                  <p className="mt-2 text-[25px] font-medium leading-none tracking-[-0.05em]">{requestsSent}<span className="ml-1 text-[13px] text-[#85857c]">/ {monthlyCreditLimit} email credits used</span></p>
+            <div className="requests-actions-grid grid items-start gap-4 xl:grid-cols-2">
+              <section aria-labelledby="single-heading" className="requests-panel rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
+                <div className="requests-panel-heading mb-4">
+                  <span aria-hidden="true" className="requests-panel-icon requests-mail-icon"><svg fill="none" viewBox="0 0 24 24"><rect height="14" rx="3" stroke="currentColor" strokeWidth="1.7" width="18" x="3" y="5" /><path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg></span>
+                  <div>
+                    <h2 id="single-heading">Send one request</h2>
+                    <p>Add a customer and queue their review invitation.</p>
+                  </div>
                 </div>
-                <p className="text-[10px] text-[#a5a49a]">{remainingRequests} email credits available</p>
-              </div>
-              <div aria-label={`${Math.round(usagePercent)} percent of initial email credits used`} className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-valuemax={monthlyCreditLimit} aria-valuemin={0} aria-valuenow={requestsSent}>
-                <div className="h-full rounded-full bg-[#c7f36b] transition-[width] duration-500" style={{ width: `${usagePercent}%` }} />
-              </div>
-            </section>
-
-            <div className="grid items-start gap-5 xl:grid-cols-2">
-              <section aria-labelledby="single-heading" className="rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
-                <div className="mb-5 border-b border-white/[0.08] pb-4">
-                  <h2 className="text-[14px] font-medium text-[#f0efe7]" id="single-heading">Send one request</h2>
-                  <p className="mt-1 text-[10px] text-[#85857c]">Add a customer and queue their review invitation.</p>
-                </div>
-                <form className="space-y-4" onSubmit={submitSingleRequest}>
-                  <label className="block text-[10px] font-medium text-[#b9b8ae]">Customer name
-                    <input autoComplete="name" className="mt-2 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" onChange={(event) => setName(event.target.value)} placeholder="e.g. Jamie Rivera" required value={name} />
+                <form className="requests-form space-y-3" onSubmit={submitSingleRequest}>
+                  <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Customer name
+                    <input autoComplete="name" className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" onChange={(event) => setName(event.target.value)} placeholder="e.g. Jamie Rivera" required value={name} />
                   </label>
-                  <label className="block text-[10px] font-medium text-[#b9b8ae]">Phone or email
-                    <input autoComplete="email" className="mt-2 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" onChange={(event) => setContact(event.target.value)} placeholder="jamie@example.com or (555) 012-3456" required value={contact} />
+                  <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Phone or email
+                    <input autoComplete="email" className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" onChange={(event) => setContact(event.target.value)} placeholder="Phone or email" required value={contact} />
                   </label>
-                  <label className="block text-[10px] font-medium text-[#b9b8ae]">Service / department
-                    <select className="mt-2 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none focus:border-[#c7f36b]/60" onChange={(event) => setService(event.target.value)} required value={service}>
+                  <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Service / department
+                    <select className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none focus:border-[#c7f36b]/60" onChange={(event) => setService(event.target.value)} required value={service}>
                       <option disabled value="">Choose a service</option><option>General</option><option>Clinic visit</option><option>Hair &amp; beauty</option><option>Personal training</option><option>Dining</option><option>Other</option>
                     </select>
                   </label>
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <button className="inline-flex h-10 items-center gap-2 rounded-[4px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-40" disabled={remainingRequests === 0} type="submit">Queue request <span aria-hidden="true">↗</span></button>
+                  <div className="requests-form-actions flex flex-wrap items-center gap-3 pt-1">
+                    <button className="requests-primary inline-flex h-10 items-center gap-2 rounded-[4px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-40" disabled={remainingRequests === 0} type="submit">Queue request <span aria-hidden="true">✓</span></button>
                     <p aria-live="polite" className="text-[10px] text-[#c7f36b]" role="status">{formMessage}</p>
                   </div>
                 </form>
               </section>
 
-              <section aria-labelledby="bulk-heading" className="rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
-                <div className="mb-5 border-b border-white/[0.08] pb-4">
-                  <h2 className="text-[14px] font-medium text-[#f0efe7]" id="bulk-heading">Import a customer list</h2>
-                  <p className="mt-1 text-[10px] text-[#85857c]">Add multiple customers from a spreadsheet.</p>
+              <section aria-labelledby="bulk-heading" className="requests-panel rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
+                <div className="requests-panel-heading mb-4">
+                  <span aria-hidden="true" className="requests-panel-icon requests-import-icon"><svg fill="none" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 14v5h14v-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg></span>
+                  <div>
+                    <h2 id="bulk-heading">Import a customer list</h2>
+                    <p>Add multiple customers from a spreadsheet.</p>
+                  </div>
                 </div>
                 <input accept=".csv,.xlsx" className="sr-only" disabled={isImporting} onChange={(event) => void importFile(event.target.files?.[0])} ref={fileInput} type="file" />
                 <button
-                  className={`flex min-h-[174px] w-full flex-col items-center justify-center rounded-[5px] border border-dashed px-5 text-center transition-colors ${isDragging ? "border-[#c7f36b]/70 bg-[#c7f36b]/[0.07]" : "border-white/[0.16] bg-[#10110f]/50 hover:border-white/30"} disabled:cursor-not-allowed disabled:opacity-40`}
+                  className={`requests-dropzone flex min-h-[174px] w-full flex-col items-center justify-center rounded-[5px] border border-dashed px-5 text-center transition-colors ${isDragging ? "requests-dropzone-active" : ""} disabled:cursor-not-allowed disabled:opacity-40`}
                   disabled={isImporting}
                   onClick={() => fileInput.current?.click()}
                   onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
@@ -286,16 +301,16 @@ export default function RequestsClient({
                   onDrop={(event) => { event.preventDefault(); setIsDragging(false); void importFile(event.dataTransfer.files[0]); }}
                   type="button"
                 >
-                  <span aria-hidden="true" className="mb-3 flex size-9 items-center justify-center rounded-[4px] border border-[#c7f36b]/25 bg-[#c7f36b]/[0.07] text-[17px] text-[#c7f36b]">↑</span>
-                  <span className="text-[11px] font-medium text-[#e7e6dd]">Drop your file here or <span className="text-[#c7f36b]">browse</span></span>
+                  <span aria-hidden="true" className="requests-upload-art"><span className="requests-upload-bubble requests-upload-bubble-blue"><svg fill="none" viewBox="0 0 24 24"><path d="M19.5 11.25a7.25 7.25 0 0 1-10.82 6.3L4.5 19l.95-3.97A7.25 7.25 0 1 1 19.5 11.25Z" fill="currentColor" /><path d="M8.5 10h7m-7 3h5" stroke="white" strokeLinecap="round" strokeWidth="1.3" /></svg></span><span className="requests-upload-bubble requests-upload-bubble-teal"><svg fill="none" viewBox="0 0 24 24"><path d="M19.25 11.5a7.25 7.25 0 0 1-10.82 6.3L4.25 19l.95-3.97A7.25 7.25 0 1 1 19.25 11.5Z" fill="currentColor" /><path d="M9 8.8c.35 2.55 1.65 3.85 4.2 4.2" stroke="white" strokeLinecap="round" strokeWidth="1.3" /></svg></span></span>
+                  <span className="requests-dropzone-copy">Drop your file here or <span>browse</span></span>
                   <span className="mt-1.5 text-[9px] text-[#85857c]">CSV or Excel (.xlsx) · Up to 10 MB</span>
                   <span className="mt-2 text-[9px] text-[#686960]">Columns: Name, Phone or Email, Service or Department</span>
                 </button>
                 {(isImporting || uploadProgress > 0) && (
                   <div className="mt-4" aria-live="polite">
                     <div className="mb-2 flex justify-between text-[9px] text-[#a5a49a]"><span>{uploadProgress < 96 ? "Reading and validating file" : uploadProgress < 100 ? "Saving requests and credits" : "Import complete"}</span><span>{uploadProgress}%</span></div>
-                    <div aria-label="File import progress" className="h-1 overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={uploadProgress}>
-                      <div className="h-full rounded-full bg-[#7fb8be] transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
+                      <div aria-label="File import progress" className="requests-progress-track h-1 overflow-hidden rounded-full" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={uploadProgress}>
+                      <div className="requests-progress-value h-full rounded-full transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
                     </div>
                   </div>
                 )}
@@ -303,19 +318,34 @@ export default function RequestsClient({
               </section>
             </div>
 
-            <section aria-labelledby="queue-heading" className="mt-5 overflow-hidden rounded-[6px] border border-white/[0.09] bg-[#171814]">
-              <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-4 sm:px-5">
-                <div><h2 className="text-[13px] font-medium text-[#f0efe7]" id="queue-heading">Recently queued</h2><p className="mt-1 text-[10px] text-[#85857c]">Latest review requests for your workspace</p></div>
-                <span className="text-[10px] text-[#85857c]">{requests.length} {requests.length === 1 ? "request" : "requests"}</span>
+            <section aria-labelledby="queue-heading" className="requests-panel requests-queue mt-5 overflow-hidden rounded-[6px] border border-white/[0.09] bg-[#171814]">
+              <div className="requests-queue-header flex items-center justify-between border-b border-white/[0.08] px-4 py-4 sm:px-5">
+                <div>
+                  <h2 id="queue-heading">Recently queued</h2>
+                  <p>Latest review requests for your workspace</p>
+                </div>
+                <span className="requests-queue-count">{requests.length} {requests.length === 1 ? "request" : "requests"}</span>
               </div>
               {requests.length === 0 ? (
-                <p className="px-4 py-8 text-center text-[10px] text-[#77786e] sm:px-5">Requests you add will appear here.</p>
+                <div className="requests-queue-empty">
+                  <span aria-hidden="true" className="requests-queue-empty-icon">
+                    <svg fill="none" viewBox="0 0 24 24"><path d="M4 7.5h16v12H4zM4 8l8 6 8-6M8 4.5h8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
+                  </span>
+                  <p>No requests queued yet</p>
+                  <span>New customer requests will appear here.</span>
+                </div>
               ) : (
-                <div className="divide-y divide-white/[0.07]">
+                <div className="requests-queue-list">
                   {requests.slice(0, 6).map((request) => (
-                    <article className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5" key={request.id}>
-                      <div className="min-w-0"><p className="truncate text-[11px] font-medium text-[#e7e6dd]">{request.name}</p><p className="mt-1 truncate text-[9px] text-[#85857c]">{request.contact} <span className="mx-1">·</span> {request.service}</p></div>
-                      <span className="inline-flex items-center gap-1.5 text-[9px] text-[#c7f36b]"><span className="size-1.5 rounded-full bg-[#c7f36b]" />{request.status}</span>
+                    <article className="requests-queue-row flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5" key={request.id}>
+                      <div className="requests-queue-customer">
+                        <span aria-hidden="true" className="requests-queue-avatar">{request.name.trim().charAt(0).toUpperCase()}</span>
+                        <span className="min-w-0">
+                          <span className="requests-queue-name">{request.name}</span>
+                          <span className="requests-queue-detail">{request.contact}<i aria-hidden="true" />{request.service}</span>
+                        </span>
+                      </div>
+                      <span className="requests-status"><i aria-hidden="true" />{request.status}</span>
                     </article>
                   ))}
                 </div>
