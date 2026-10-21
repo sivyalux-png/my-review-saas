@@ -36,7 +36,12 @@ request proxy refreshes Supabase cookies and redirects signed-out visitors to
    `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`).
    These are server-only variables: never use the `NEXT_PUBLIC_` prefix for
    them or expose their values to the browser.
-6. Add all five variables in Vercel under **Project Settings → Environment
+6. In Resend, verify a sending domain and set the server-only
+   `RESEND_API_KEY` and `RESEND_FROM_EMAIL` variables. Set
+   `RESEND_FROM_EMAIL` to an address on that verified domain (for example,
+   `reviews@your-verified-domain.com`). Review request emails use the
+   workspace's business name as the sender display name.
+7. Add all seven variables in Vercel under **Project Settings → Environment
    Variables**, using the correct site URL for each environment, then restart
    the local development server or redeploy.
 
@@ -74,8 +79,16 @@ preserving previously consumed email credits. Then apply
 [`supabase/migrations/08_reconcile_review_and_entitlement_columns.sql`](./supabase/migrations/08_reconcile_review_and_entitlement_columns.sql)
 to safely add any missing entitlement, settings, license, or review-request
 columns. It is safe to rerun, but does not replace migrations 01–07 or recreate
-their functions and policies. The first migration creates
-`profiles`, `licenses`, and `settings`, enables row-level security, and
+their functions and policies. Then run
+[`supabase/migrations/09_review_email_request_id.sql`](./supabase/migrations/09_review_email_request_id.sql)
+to return the created request ID with its updated credit balance. The
+authenticated `/api/send-review` route uses that ID to email email-address
+contacts through Resend and marks the request as `sent`; phone-only contacts
+remain queued. Apply
+[`supabase/migrations/10_fix_review_request_credits_ambiguity.sql`](./supabase/migrations/10_fix_review_request_credits_ambiguity.sql)
+after migration 09 to replace any `create_review_request` overloads with the
+unambiguous, four-parameter function used by the dashboard. The first migration
+creates `profiles`, `licenses`, and `settings`, enables row-level security, and
 automatically creates profiles for new Supabase Auth users.
 
 Signup accepts only a key already present in `licenses` with `status = 'available'`

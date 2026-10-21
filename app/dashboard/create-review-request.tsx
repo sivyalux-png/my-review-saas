@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createReviewRequest } from "./requests/actions";
+import { isEmailContact, sendReviewEmail } from "./requests/send-review";
 
 type CreateReviewRequestProps = {
   creditsRemaining: number;
@@ -63,6 +64,9 @@ export default function CreateReviewRequest({
         return;
       }
 
+      const emailResult = isEmailContact(contact)
+        ? await sendReviewEmail(result.requestId)
+        : null;
       onCreditsChanged(result.creditsRemaining);
       setCustomerName("");
       setContact("");
@@ -70,13 +74,17 @@ export default function CreateReviewRequest({
       setIsOpen(false);
       setToast({
         id: Date.now(),
-        message: `Review request created for ${customerName.trim()}. 1 credit used.`,
-        type: "success",
+        message: emailResult?.ok
+          ? `Review email sent to ${contact.trim()}. 1 credit used.`
+          : emailResult
+            ? emailResult.message
+            : `Review request queued for ${customerName.trim()}. 1 credit used.`,
+        type: emailResult && !emailResult.ok ? "error" : "success",
       });
       router.refresh();
     } catch (error) {
       console.error("Unable to create a review request.", error);
-      setFormError("We couldn't create the request right now. Please try again.");
+      setFormError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsSubmitting(false);
     }

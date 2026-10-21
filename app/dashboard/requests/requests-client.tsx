@@ -10,6 +10,7 @@ import {
   importReviewRequests,
   type ReviewRequestImportRow,
 } from "./actions";
+import { isEmailContact, sendReviewEmail } from "./send-review";
 
 type CustomerRequest = {
   id: string;
@@ -134,21 +135,28 @@ export default function RequestsClient({
       }
 
       setCreditsRemaining(result.creditsRemaining);
+      const emailResult = isEmailContact(contact)
+        ? await sendReviewEmail(result.requestId)
+        : null;
       addRequests([{
-        id: crypto.randomUUID(),
+        id: result.requestId,
         name: name.trim(),
         contact: contact.trim(),
         service,
-        status: "queued",
+        status: emailResult?.ok ? "sent" : "queued",
       }]);
-      setFormMessage(`Request queued for ${name.trim()}.`);
+      setFormMessage(emailResult?.ok
+        ? `Review email sent to ${contact.trim()}.`
+        : emailResult
+          ? emailResult.message
+          : `Request queued for ${name.trim()}.`);
       setName("");
       setContact("");
       setService("");
       router.refresh();
     } catch (error) {
       console.error("Unable to create a review request from the Requests page.", error);
-      setFormMessage("We couldn't create the request right now. Please try again.");
+      setFormMessage(error instanceof Error ? error.message : String(error));
     }
   }
 

@@ -15,7 +15,7 @@ export type ReviewRequestImportRow = {
 };
 
 type CreateReviewRequestResult =
-  | { ok: true; creditsRemaining: number }
+  | { ok: true; requestId: string; creditsRemaining: number }
   | { ok: false; message: string };
 
 export async function createReviewRequest(
@@ -56,26 +56,53 @@ export async function createReviewRequest(
     return authentication;
   }
 
-  const { data: creditsRemaining, error } = await authentication.supabase.rpc("create_review_request", {
-    p_customer_name: normalizedName,
-    p_contact: normalizedContact,
-    p_notes: normalizedNotes || null,
-    p_service: normalizedService || null,
-  });
+  let data: unknown;
+  try {
+    const result = await authentication.supabase.rpc("create_review_request", {
+      p_customer_name: normalizedName,
+      p_contact: normalizedContact,
+      p_notes: normalizedNotes || null,
+      p_service: normalizedService || null,
+    });
 
-  if (error) {
-    return handleRequestError(error, "Unable to create a review request.");
-  }
+    if (result.error) {
+      console.error("Unable to create a review request.", result.error);
+      return { ok: false, message: result.error.message };
+    }
 
-  if (typeof creditsRemaining !== "number" || !Number.isInteger(creditsRemaining)) {
-    console.error("Review-request creation returned an invalid credit balance.", creditsRemaining);
+    data = result.data;
+  } catch (error) {
+    console.error("Unable to create a review request.", error);
     return {
       ok: false,
-      message: "The request may have been created, but we couldn't confirm your updated balance. Refresh the page.",
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 
-  return { ok: true, creditsRemaining };
+  const result = Array.isArray(data) ? data[0] : null;
+  const requestId = isRecord(result)
+    ? result.request_id ?? result.new_request_id
+    : undefined;
+  const creditsRemaining = isRecord(result)
+    ? result.credits_remaining ?? result.remaining_credits
+    : undefined;
+  if (
+    typeof requestId !== "string" ||
+    typeof creditsRemaining !== "number" ||
+    !Number.isInteger(creditsRemaining)
+  ) {
+    console.error("Review-request creation returned an invalid result.", data);
+    return {
+      ok: false,
+      message: "The request may have been created, but we couldn't confirm its details. Refresh the page.",
+    };
+  }
+
+  return {
+    ok: true,
+    requestId,
+    creditsRemaining,
+  };
 }
 
 type AuthenticatedSupabaseResult =
@@ -182,13 +209,18 @@ export async function importReviewRequests(
   }
 
   const result = Array.isArray(data) ? data[0] : null;
+  const importedCount = isRecord(result)
+    ? result.inserted_count ?? result.request_count
+    : undefined;
+  const creditsRemaining = isRecord(result)
+    ? result.available_credits ?? result.remaining_credits ?? result.credits_remaining
+    : undefined;
   if (
-    !result ||
-    typeof result.inserted_count !== "number" ||
-    !Number.isInteger(result.inserted_count) ||
-    result.inserted_count !== normalizedRows.length ||
-    typeof result.available_credits !== "number" ||
-    !Number.isInteger(result.available_credits)
+    typeof importedCount !== "number" ||
+    !Number.isInteger(importedCount) ||
+    importedCount !== normalizedRows.length ||
+    typeof creditsRemaining !== "number" ||
+    !Number.isInteger(creditsRemaining)
   ) {
     console.error("Bulk review-request creation returned an invalid result.", data);
     return {
@@ -199,7 +231,11 @@ export async function importReviewRequests(
 
   return {
     ok: true,
-    importedCount: result.inserted_count,
-    creditsRemaining: result.available_credits,
+    importedCount,
+    creditsRemaining,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
