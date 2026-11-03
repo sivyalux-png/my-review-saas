@@ -1878,7 +1878,7 @@ main table td {
   }
 
   .requests-progress-value {
-    min-width: 5px;
+    height: 100%;
     border-radius: inherit;
     background: linear-gradient(95deg, #20cbb1 0%, #19b8c2 54%, #6477ef 100%);
     box-shadow: 0 0 9px rgba(42, 190, 199, 0.35);
