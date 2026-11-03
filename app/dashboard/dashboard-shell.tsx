@@ -22,14 +22,12 @@ export default function DashboardShell({
   fullName,
   planTier,
   creditsRemaining,
-  smsCreditsRemaining,
 }: {
   children: ReactNode;
   businessName: string;
   fullName: string | null;
   planTier: string | null;
   creditsRemaining: number | null;
-  smsCreditsRemaining: number;
 }) {
   const pathname = usePathname();
   const activePage = navigation.find(({ href }) => isActivePath(pathname, href));
@@ -116,13 +114,13 @@ export default function DashboardShell({
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
             <Link
               aria-label={`Plan & credits: ${planTier
-                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} email${smsCreditsRemaining > 0 ? ` · ${smsCreditsRemaining.toLocaleString()} SMS` : ""}`
+                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} email credits`
                 : "No active plan"}`}
               className="hidden rounded-full border border-violet-300/50 bg-white/55 px-3 py-1.5 text-[10px] font-medium text-violet-800 transition-colors hover:border-violet-300 hover:bg-white/75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 sm:inline"
               href="/dashboard/plan"
             >
               {planTier
-                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} email${smsCreditsRemaining > 0 ? ` · ${smsCreditsRemaining.toLocaleString()} SMS` : ""}`
+                ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} email credits`
                 : "No active plan"}
             </Link>
             <span className="hidden max-w-48 truncate text-[10px] text-zinc-500 sm:inline">{businessName}</span>

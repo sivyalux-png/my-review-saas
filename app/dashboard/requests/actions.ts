@@ -1,17 +1,15 @@
 "use server";
 
 import { createClient } from "../../../lib/supabase/server";
+import { isValidEmail } from "../../../lib/review-requests";
 
 const maximumNameLength = 120;
-const maximumContactLength = 254;
-const maximumNotesLength = 2000;
-const maximumServiceLength = 120;
+const maximumEmailLength = 254;
 const maximumImportRows = 200;
 
 export type ReviewRequestImportRow = {
   name: string;
-  contact: string;
-  service: string;
+  email: string;
 };
 
 type CreateReviewRequestResult =
@@ -20,35 +18,23 @@ type CreateReviewRequestResult =
 
 export async function createReviewRequest(
   customerName: string,
-  contact: string,
-  notes: string,
-  service = "",
+  customerEmail: string,
 ): Promise<CreateReviewRequestResult> {
   if (
     typeof customerName !== "string" ||
-    typeof contact !== "string" ||
-    typeof notes !== "string" ||
-    typeof service !== "string"
+    typeof customerEmail !== "string"
   ) {
-    return { ok: false, message: "Enter the customer's name and phone number or email." };
+    return { ok: false, message: "Enter the customer's name and email address." };
   }
 
   const normalizedName = customerName.trim();
-  const normalizedContact = contact.trim();
-  const normalizedNotes = notes.trim();
-  const normalizedService = service.trim();
+  const normalizedEmail = customerEmail.trim();
 
   if (!normalizedName || normalizedName.length > maximumNameLength) {
     return { ok: false, message: "Enter a customer name of 1 to 120 characters." };
   }
-  if (!normalizedContact || normalizedContact.length > maximumContactLength) {
-    return { ok: false, message: "Enter a phone number or email of up to 254 characters." };
-  }
-  if (normalizedNotes.length > maximumNotesLength) {
-    return { ok: false, message: "Notes must be 2,000 characters or fewer." };
-  }
-  if (normalizedService.length > maximumServiceLength) {
-    return { ok: false, message: "Service or department must be 120 characters or fewer." };
+  if (!isValidEmail(normalizedEmail) || normalizedEmail.length > maximumEmailLength) {
+    return { ok: false, message: "Enter a valid customer email address of up to 254 characters." };
   }
 
   const authentication = await getAuthenticatedSupabase();
@@ -60,9 +46,7 @@ export async function createReviewRequest(
   try {
     const result = await authentication.supabase.rpc("create_review_request", {
       p_customer_name: normalizedName,
-      p_contact: normalizedContact,
-      p_notes: normalizedNotes || null,
-      p_service: normalizedService || null,
+      p_customer_email: normalizedEmail,
     });
 
     if (result.error) {
@@ -156,6 +140,7 @@ type ImportReviewRequestsResult =
       ok: true;
       importedCount: number;
       creditsRemaining: number;
+      requestIds: string[];
     }
   | { ok: false; message: string };
 
@@ -174,26 +159,22 @@ export async function importReviewRequests(
     if (
       !row ||
       typeof row.name !== "string" ||
-      typeof row.contact !== "string" ||
-      typeof row.service !== "string"
+      typeof row.email !== "string"
     ) {
       return { ok: false, message: "The import contains an invalid customer row. Check the file and try again." };
     }
 
     const name = row.name.trim();
-    const contact = row.contact.trim();
-    const service = row.service.trim();
+    const email = row.email.trim();
     if (
       !name ||
       name.length > maximumNameLength ||
-      !contact ||
-      contact.length > maximumContactLength ||
-      !service ||
-      service.length > maximumServiceLength
+      !isValidEmail(email) ||
+      email.length > maximumEmailLength
     ) {
       return { ok: false, message: "The import contains an invalid customer row. Check the file and try again." };
     }
-    normalizedRows.push({ name, contact, service });
+    normalizedRows.push({ name, email });
   }
 
   const authentication = await getAuthenticatedSupabase();
@@ -215,12 +196,17 @@ export async function importReviewRequests(
   const creditsRemaining = isRecord(result)
     ? result.available_credits ?? result.remaining_credits ?? result.credits_remaining
     : undefined;
+  const requestIds = isRecord(result) ? result.request_ids : undefined;
+  const validRequestIds = Array.isArray(requestIds)
+    ? requestIds.filter((requestId): requestId is string => typeof requestId === "string")
+    : [];
   if (
     typeof importedCount !== "number" ||
     !Number.isInteger(importedCount) ||
     importedCount !== normalizedRows.length ||
     typeof creditsRemaining !== "number" ||
-    !Number.isInteger(creditsRemaining)
+    !Number.isInteger(creditsRemaining) ||
+    validRequestIds.length !== normalizedRows.length
   ) {
     console.error("Bulk review-request creation returned an invalid result.", data);
     return {
@@ -233,6 +219,7 @@ export async function importReviewRequests(
     ok: true,
     importedCount,
     creditsRemaining,
+    requestIds: validRequestIds,
   };
 }
 

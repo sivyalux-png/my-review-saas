@@ -51,7 +51,8 @@ export default function PublicReviewPage({
   initialSubmitted: boolean;
   initialError: string;
 }) {
-  const alreadyCompleted = request.status === "completed";
+  const alreadyCompleted =
+    request.status === "completed" || request.status === "private_feedback_submitted";
   const [rating, setRating] = useState<number | null>(initialRating ?? request.rating);
   const [feedback, setFeedback] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);

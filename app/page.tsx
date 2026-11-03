@@ -63,7 +63,7 @@ export default function Home() {
             </div>
             <div className="grid lg:grid-cols-[1fr_190px]">
               <div className="border-b border-white/[0.08] p-4 sm:p-5 lg:border-b-0 lg:border-r">
-                <div className="mb-4 flex items-center justify-between"><div><p className="text-[12px] font-medium text-[#f0efe7]">Recent reviews</p><p className="mt-1 text-[10px] text-[#85857c]">Your customers are talking</p></div><span className="rounded-[3px] border border-white/[0.1] px-2 py-1 text-[9px] text-[#bab9af]">All channels⌄</span></div>
+                <div className="mb-4 flex items-center justify-between"><div><p className="text-[12px] font-medium text-[#f0efe7]">Recent reviews</p><p className="mt-1 text-[10px] text-[#85857c]">Your customers are talking</p></div><span className="rounded-[3px] border border-white/[0.1] px-2 py-1 text-[9px] text-[#bab9af]">Email requests⌄</span></div>
                 <div className="space-y-2.5">
                   <article className="rounded-[5px] border border-white/[0.08] bg-[#20211d] p-3">
                     <div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className="review-source source-google">G</span><span className="text-[10px] font-medium text-[#deddd3]">Sofia R.</span><span className="text-[9px] text-[#7f8076]">· 12 min ago</span></div><span className="text-[10px] tracking-[0.08em] text-[#edbd65]">★★★★★</span></div>
@@ -167,8 +167,6 @@ export default function Home() {
               <ul className="mt-7 flex-1 space-y-3 border-t border-white/[0.09] pt-6 text-[12px] text-[#cfcec4]">
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 10 business locations</li>
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 10,000 initial email credits</li>
-                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> 500 SMS / WhatsApp credits</li>
-                <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Email, SMS, and WhatsApp channels</li>
                 <li className="flex gap-2"><span className="text-[#c7f36b]">✓</span> Priority support</li>
               </ul>
               <a href="/signup" className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-[4px] border border-white/[0.16] text-[12px] font-semibold text-[#f3f2e9] transition-colors hover:border-[#c7f36b]/50 hover:text-[#c7f36b]">Acquire Deal <span aria-hidden="true">↗</span></a>

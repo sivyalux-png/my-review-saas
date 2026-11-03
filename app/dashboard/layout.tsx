@@ -26,7 +26,7 @@ export default async function DashboardLayout({
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, business_name, plan_tier, credits_remaining, sms_credits_remaining")
+      .select("full_name, business_name, plan_tier, credits_remaining")
       .eq("id", data.claims.sub)
       .maybeSingle(),
     supabase
@@ -49,7 +49,6 @@ export default async function DashboardLayout({
       creditsRemaining={profile?.credits_remaining ?? null}
       fullName={profile?.full_name ?? null}
       planTier={profile?.plan_tier ?? null}
-      smsCreditsRemaining={profile?.sms_credits_remaining ?? 0}
     >
       {children}
     </DashboardShell>

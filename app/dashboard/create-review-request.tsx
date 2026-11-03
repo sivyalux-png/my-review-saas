@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createReviewRequest } from "./requests/actions";
-import { isEmailContact, sendReviewEmail } from "./requests/send-review";
+import { sendReviewEmail } from "./requests/send-review";
 
 type CreateReviewRequestProps = {
   creditsRemaining: number;
@@ -18,9 +18,6 @@ type Toast = {
 
 const inputClass =
   "mt-2 h-11 w-full rounded-[5px] border border-white/[0.12] bg-[#10110f] px-3.5 text-[12px] text-[#f3f2e9] outline-none transition-colors placeholder:text-[#6e6f65] focus:border-[#c7f36b]/70 focus:ring-2 focus:ring-[#c7f36b]/10";
-const textareaClass =
-  "mt-2 min-h-28 w-full resize-y rounded-[5px] border border-white/[0.12] bg-[#10110f] px-3.5 py-3 text-[12px] leading-5 text-[#f3f2e9] outline-none transition-colors placeholder:text-[#6e6f65] focus:border-[#c7f36b]/70 focus:ring-2 focus:ring-[#c7f36b]/10";
-
 export default function CreateReviewRequest({
   creditsRemaining,
   onCreditsChanged,
@@ -29,8 +26,7 @@ export default function CreateReviewRequest({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
-  const [contact, setContact] = useState("");
-  const [notes, setNotes] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
@@ -58,28 +54,23 @@ export default function CreateReviewRequest({
     setIsSubmitting(true);
 
     try {
-      const result = await createReviewRequest(customerName, contact, notes, "");
+      const result = await createReviewRequest(customerName, customerEmail);
       if (!result.ok) {
         setFormError(result.message);
         return;
       }
 
-      const emailResult = isEmailContact(contact)
-        ? await sendReviewEmail(result.requestId)
-        : null;
-      onCreditsChanged(result.creditsRemaining);
+      const emailResult = await sendReviewEmail(result.requestId);
+      if (emailResult.ok) onCreditsChanged(emailResult.creditsRemaining);
       setCustomerName("");
-      setContact("");
-      setNotes("");
+      setCustomerEmail("");
       setIsOpen(false);
       setToast({
         id: Date.now(),
         message: emailResult?.ok
-          ? `Review email sent to ${contact.trim()}. 1 credit used.`
-          : emailResult
-            ? emailResult.message
-            : `Review request queued for ${customerName.trim()}. 1 credit used.`,
-        type: emailResult && !emailResult.ok ? "error" : "success",
+          ? `Review email sent to ${customerEmail.trim()}. 1 credit used.`
+          : `The request was saved, but its email was not sent: ${emailResult.message}`,
+        type: emailResult.ok ? "success" : "error",
       });
       router.refresh();
     } catch (error) {
@@ -120,7 +111,7 @@ export default function CreateReviewRequest({
             <div>
               <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-[#c7f36b]">Customer outreach</p>
               <h2 className="mt-2 text-[20px] font-medium tracking-[-0.035em]" id="create-request-heading">Create a review request</h2>
-              <p className="mt-2 text-[11px] leading-5 text-[#929188]" id="create-request-description">Add a customer to your review queue. Creating a request uses 1 available credit.</p>
+              <p className="mt-2 text-[11px] leading-5 text-[#929188]" id="create-request-description">Send a review invitation by email. 1 credit is used only when the email is dispatched.</p>
             </div>
             <button
               aria-label="Close dialog"
@@ -148,30 +139,18 @@ export default function CreateReviewRequest({
               />
             </label>
 
-            <label className="block text-[10px] font-medium text-[#b9b8ae]" htmlFor="request-customer-contact">
-              Phone number or email
+            <label className="block text-[10px] font-medium text-[#b9b8ae]" htmlFor="request-customer-email">
+              Customer email
               <input
                 autoComplete="email"
                 className={inputClass}
-                id="request-customer-contact"
+                id="request-customer-email"
                 maxLength={254}
-                onChange={(event) => setContact(event.target.value)}
-                placeholder="jamie@example.com or (555) 012-3456"
+                onChange={(event) => setCustomerEmail(event.target.value)}
+                placeholder="jamie@example.com"
                 required
-                type="text"
-                value={contact}
-              />
-            </label>
-
-            <label className="block text-[10px] font-medium text-[#b9b8ae]" htmlFor="request-notes">
-              Notes <span className="font-normal text-[#77786f]">(optional)</span>
-              <textarea
-                className={textareaClass}
-                id="request-notes"
-                maxLength={2000}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Add any context for this request…"
-                value={notes}
+                type="email"
+                value={customerEmail}
               />
             </label>
 
@@ -182,7 +161,7 @@ export default function CreateReviewRequest({
 
             {creditsRemaining < 1 && (
               <p className="rounded-[5px] border border-[#edbd65]/20 bg-[#edbd65]/[0.06] px-3.5 py-3 text-[10px] leading-5 text-[#edbd65]">
-                You have no credits available. Activate or top up a plan before creating a request.
+                You have no credits available. Activate or top up a plan before sending an email request.
               </p>
             )}
 
@@ -206,7 +185,7 @@ export default function CreateReviewRequest({
                 disabled={isSubmitting || creditsRemaining < 1}
                 type="submit"
               >
-                {isSubmitting ? "Creating request…" : "Create request"}
+                {isSubmitting ? "Sending email…" : "Send review email"}
               </button>
             </div>
           </form>

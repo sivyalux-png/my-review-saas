@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
   const { data: reviewRequest, error: requestError } = await supabase
     .from("review_requests")
-    .select("id, customer_name, contact, status")
+    .select("id, customer_name, customer_email, status, email_status")
     .eq("id", payload.requestId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -64,10 +64,13 @@ export async function POST(request: Request) {
   if (!reviewRequest) {
     return Response.json({ error: "Review request not found." }, { status: 404 });
   }
-  if (reviewRequest.status !== "queued") {
+  if (
+    reviewRequest.status !== "queued" ||
+    !["queued", "failed"].includes(reviewRequest.email_status)
+  ) {
     return Response.json({ error: "This review request has already been sent or completed." }, { status: 409 });
   }
-  if (!emailPattern.test(reviewRequest.contact)) {
+  if (!reviewRequest.customer_email || !emailPattern.test(reviewRequest.customer_email)) {
     return Response.json({ error: "This review request does not contain a valid email address." }, { status: 400 });
   }
 
@@ -128,12 +131,10 @@ export async function POST(request: Request) {
     .replace(/[\r\n]+/g, " ")
     .trim();
   const body = renderTemplate(bodyTemplate, reviewRequest.customer_name, businessName);
-  const ratingLinks = [1, 2, 3, 4, 5].map((rating) => {
-    const path = rating >= 4
-      ? `/r/${reviewRequest.id}/google?rating=${rating}`
-      : `/r/${reviewRequest.id}?rating=${rating}`;
-    return { rating, url: new URL(path, siteOrigin).toString() };
-  });
+  const ratingLinks = [1, 2, 3, 4, 5].map((rating) => ({
+    rating,
+    url: new URL(`/review/${reviewRequest.id}?rating=${rating}`, siteOrigin).toString(),
+  }));
   const text = body.replace(ratingWidgetToken, () =>
     ratingLinks.map(({ rating, url }) => `${rating} stars: ${url}`).join("\n"),
   );
@@ -155,6 +156,34 @@ export async function POST(request: Request) {
     return Response.json({ error: "Email sending is unavailable right now." }, { status: 503 });
   }
 
+  const { data: reservedCredits, error: reserveError } = await admin.rpc(
+    "reserve_review_email_credit",
+    { p_request_id: reviewRequest.id },
+  );
+  if (reserveError) {
+    if (
+      reserveError.code === "P0001" &&
+      reserveError.message === "No review-request credits remain."
+    ) {
+      return Response.json(
+        { error: "You have no credits available. Activate or top up a plan to continue." },
+        { status: 402 },
+      );
+    }
+    if (reserveError.code === "P0001") {
+      return Response.json({ error: reserveError.message }, { status: 409 });
+    }
+    console.error("Unable to reserve a credit for review email.", reserveError);
+    return Response.json({ error: "We couldn't prepare this email for delivery." }, { status: 500 });
+  }
+  if (typeof reservedCredits !== "number" || !Number.isInteger(reservedCredits)) {
+    console.error("Email credit reservation returned an invalid balance.", reservedCredits);
+    return Response.json(
+      { error: "The email wasn't sent because its credit reservation couldn't be confirmed." },
+      { status: 500 },
+    );
+  }
+
   let resendResponse: Response;
   try {
     resendResponse = await fetch("https://api.resend.com/emails", {
@@ -165,7 +194,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         from,
-        to: [reviewRequest.contact],
+        to: [reviewRequest.customer_email],
         subject,
         text,
         html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${html}</div>`,
@@ -173,32 +202,50 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Resend request failed while sending a review email.", error);
+    const { error: refundError } = await admin.rpc("finalize_review_email_dispatch", {
+      p_request_id: reviewRequest.id,
+      p_sent: false,
+    });
+    if (refundError) {
+      console.error("Unable to refund credit after review email delivery failed.", refundError);
+      return Response.json(
+        { error: "The email wasn't sent, and we couldn't confirm the credit refund. Please contact support." },
+        { status: 500 },
+      );
+    }
     return Response.json({ error: "We couldn't send the email. Please try again." }, { status: 502 });
   }
 
   if (!resendResponse.ok) {
     console.error("Resend rejected a review email.", resendResponse.status);
+    const { error: refundError } = await admin.rpc("finalize_review_email_dispatch", {
+      p_request_id: reviewRequest.id,
+      p_sent: false,
+    });
+    if (refundError) {
+      console.error("Unable to refund credit after Resend rejected review email.", refundError);
+      return Response.json(
+        { error: "The email wasn't sent, and we couldn't confirm the credit refund. Please contact support." },
+        { status: 500 },
+      );
+    }
     return Response.json({ error: "We couldn't send the email. Please check your email configuration." }, { status: 502 });
   }
 
-  const { data: updatedRequest, error: updateError } = await admin
-    .from("review_requests")
-    .update({ status: "sent" })
-    .eq("id", reviewRequest.id)
-    .eq("user_id", userId)
-    .eq("status", "queued")
-    .select("id")
-    .maybeSingle();
+  const { data: creditsRemaining, error: finalizeError } = await admin.rpc(
+    "finalize_review_email_dispatch",
+    { p_request_id: reviewRequest.id, p_sent: true },
+  );
 
-  if (updateError || !updatedRequest) {
-    console.error("Email sent, but the review request status could not be updated.", updateError);
+  if (finalizeError || typeof creditsRemaining !== "number" || !Number.isInteger(creditsRemaining)) {
+    console.error("Email sent, but its delivery status could not be confirmed.", finalizeError ?? creditsRemaining);
     return Response.json(
-      { error: "The email was sent, but we couldn't update the request status. Please contact support." },
+      { error: "The email was sent, but we couldn't confirm its status or credit balance. Please contact support." },
       { status: 500 },
     );
   }
 
-  return Response.json({ ok: true, status: "sent" });
+  return Response.json({ ok: true, status: "sent", creditsRemaining });
 }
 
 function renderTemplate(template: string, customerName: string, businessName: string) {

@@ -4,8 +4,6 @@ export type TierEntitlement = {
   name: AppSumoTier;
   price: number;
   emailCredits: number;
-  smsCredits: number;
-  channels: readonly ("Email" | "SMS" | "WhatsApp")[];
   locations: string;
 };
 
@@ -14,24 +12,18 @@ export const appSumoTiers: readonly TierEntitlement[] = [
     name: "Tier 1",
     price: 69,
     emailCredits: 1000,
-    smsCredits: 0,
-    channels: ["Email"],
     locations: "1 location",
   },
   {
     name: "Tier 2",
     price: 99,
     emailCredits: 5000,
-    smsCredits: 0,
-    channels: ["Email"],
     locations: "3 locations",
   },
   {
     name: "Tier 3",
     price: 189,
     emailCredits: 10000,
-    smsCredits: 500,
-    channels: ["Email", "SMS", "WhatsApp"],
     locations: "10 locations",
   },
 ];

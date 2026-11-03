@@ -2,42 +2,45 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { redeemLicenseKey } from "./actions";
+import Script from "next/script";
+import { createTestCreditPackCheckout, redeemLicenseKey } from "./actions";
 import { appSumoTiers, getTierEntitlement } from "../../../lib/entitlements";
+
+declare global {
+  interface Window {
+    createLemonSqueezy?: () => void;
+    LemonSqueezy?: {
+      Url?: {
+        Open?: (url: string) => void;
+      };
+    };
+  }
+}
 
 type PlanEntitlement = {
   plan_tier: string | null;
   monthly_credit_limit: number | null;
   credits_remaining: number | null;
-  sms_credit_limit: number | null;
-  sms_credits_remaining: number | null;
 };
 
 type CreditPack = {
   credits: number;
   price: number;
   label: string;
+  variantId: number;
 };
 
 const emailCreditPacks: CreditPack[] = [
-  { credits: 500, price: 9, label: "Quick top-up" },
-  { credits: 1500, price: 24, label: "Most popular" },
-  { credits: 5000, price: 69, label: "Best value" },
-];
-
-const smsCreditPacks: CreditPack[] = [
-  { credits: 250, price: 12, label: "Quick top-up" },
-  { credits: 500, price: 22, label: "Most popular" },
-  { credits: 1000, price: 40, label: "Best value" },
+  { credits: 500, price: 9, label: "Quick top-up", variantId: 2307965 },
+  { credits: 1500, price: 24, label: "Most popular", variantId: 2308009 },
+  { credits: 5000, price: 69, label: "Best value", variantId: 2308025 },
 ];
 
 const tiers = appSumoTiers.map((tier) => ({
   name: tier.name,
   price: `$${tier.price}`,
   emailCredits: tier.emailCredits.toLocaleString(),
-  smsCredits: tier.smsCredits,
   locations: tier.locations,
-  channels: tier.channels.join(", "),
 }));
 
 export default function PlanPage({
@@ -50,32 +53,24 @@ export default function PlanPage({
   const [redemptionMessage, setRedemptionMessage] = useState("");
   const [isKeyValid, setIsKeyValid] = useState(false);
   const [isRedeeming, startRedeeming] = useTransition();
+  const [isCheckoutPending, startCheckout] = useTransition();
   const [entitlement, setEntitlement] = useState(initialEntitlement);
   const [selectedCreditPack, setSelectedCreditPack] = useState<string | null>(null);
   const [checkoutMessage, setCheckoutMessage] = useState("");
 
   const monthlyCreditLimit = entitlement?.monthly_credit_limit ?? 0;
   const creditsRemaining = entitlement?.credits_remaining ?? 0;
-  const smsCreditLimit = entitlement?.sms_credit_limit ?? 0;
-  const smsCreditsRemaining = entitlement?.sms_credits_remaining ?? 0;
   const creditsUsed = Math.max(monthlyCreditLimit - creditsRemaining, 0);
   const currentTier = getTierEntitlement(entitlement?.plan_tier);
-  const smsCreditPacksEnabled = currentTier?.channels.includes("SMS") ?? false;
   const usagePercent = monthlyCreditLimit > 0
     ? Math.min((creditsUsed / monthlyCreditLimit) * 100, 100)
     : 0;
 
-  function renderCreditPacks(
-    channel: "email" | "sms",
-    packs: CreditPack[],
-    disabled = false,
-  ) {
-    const creditUnit = channel === "email" ? "email credit" : "SMS credit";
-
+  function renderCreditPacks(packs: CreditPack[], disabled = false) {
     return (
       <div className="credit-pack-list">
         {packs.map((pack) => {
-          const packId = `${channel}-${pack.credits}`;
+          const packId = `email-${pack.credits}`;
           const isSelected = selectedCreditPack === packId;
           const isPopular = pack.label === "Most popular";
 
@@ -90,44 +85,62 @@ export default function PlanPage({
                 disabled={disabled}
                 onClick={() => {
                   setSelectedCreditPack(packId);
-                  setCheckoutMessage("");
                 }}
                 type="button"
               >
-                <span aria-hidden="true" className={`credit-pack-icon credit-pack-icon-${channel}`}>
-                  {channel === "email" ? (
-                    <svg className="size-5" fill="none" viewBox="0 0 24 24">
-                      <rect height="14" rx="3" stroke="currentColor" strokeWidth="1.7" width="18" x="3" y="5" />
-                      <path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-                    </svg>
-                  ) : (
-                    <svg className="size-5" fill="none" viewBox="0 0 24 24">
-                      <path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.52L4 19l.98-4.1A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-                      <path d="M9 9.25c.5 2.1 1.65 3.25 3.75 3.75" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-                    </svg>
-                  )}
+                <span aria-hidden="true" className="credit-pack-icon credit-pack-icon-email">
+                  <svg className="size-5" fill="none" viewBox="0 0 24 24">
+                    <rect height="14" rx="3" stroke="currentColor" strokeWidth="1.7" width="18" x="3" y="5" />
+                    <path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+                  </svg>
                 </span>
                 <span className="credit-pack-copy">
                   <span className="credit-pack-title-line">
                     <span className="credit-pack-title">
-                    {pack.credits.toLocaleString()} Extra {channel === "email" ? "Email" : "SMS / WhatsApp"} Credits
+                    {pack.credits.toLocaleString()} Extra Email Credits
                     </span>
                     {isPopular && <span className="credit-pack-popular-badge">Most popular</span>}
                   </span>
                   <span className="credit-pack-unit">
-                    ${(pack.price / pack.credits).toLocaleString("en-US", { maximumFractionDigits: 4 })} per {creditUnit}
+                    ${(pack.price / pack.credits).toLocaleString("en-US", { maximumFractionDigits: 4 })} per email credit
                   </span>
                 </span>
               </button>
               <div className="credit-pack-purchase">
                 <span className="credit-pack-price">${pack.price}</span>
                 <button
-                  aria-label={`Checkout for ${pack.credits.toLocaleString()} extra ${channel === "email" ? "email" : "SMS / WhatsApp"} credits`}
-                  className="credit-pack-checkout"
-                  disabled={disabled}
+                  aria-label={`Checkout for ${pack.credits.toLocaleString()} extra email credits`}
+                  className="credit-pack-checkout lemonsqueezy-button"
+                  disabled={disabled || isCheckoutPending}
                   onClick={() => {
                     setSelectedCreditPack(packId);
-                    setCheckoutMessage(`Checkout for ${pack.credits.toLocaleString()} extra ${channel === "email" ? "email" : "SMS / WhatsApp"} credits is coming soon.`);
+                    setCheckoutMessage("");
+                    startCheckout(async () => {
+                      try {
+                        const result = await createTestCreditPackCheckout(pack.variantId);
+                        if (!result.ok) {
+                          setCheckoutMessage(result.message);
+                          return;
+                        }
+
+                        if (window.LemonSqueezy?.Url?.Open) {
+                          try {
+                            window.LemonSqueezy.Url.Open(result.url);
+                            setCheckoutMessage("Opening secure test checkout...");
+                            return;
+                          } catch (error) {
+                            console.error("Unable to open Lemon Squeezy checkout overlay.", error);
+                          }
+                        }
+
+                        const hostedCheckoutUrl = new URL(result.url);
+                        hostedCheckoutUrl.searchParams.delete("embed");
+                        window.location.assign(hostedCheckoutUrl.toString());
+                      } catch (error) {
+                        console.error("Unable to start Lemon Squeezy test checkout.", error);
+                        setCheckoutMessage("We couldn't start checkout. Please try again.");
+                      }
+                    });
                   }}
                   type="button"
                 >
@@ -164,8 +177,6 @@ export default function PlanPage({
             plan_tier: result.entitlement.planTier,
             monthly_credit_limit: result.entitlement.monthlyCreditLimit,
             credits_remaining: result.entitlement.creditsRemaining,
-            sms_credit_limit: result.entitlement.smsCreditLimit,
-            sms_credits_remaining: result.entitlement.smsCreditsRemaining,
           });
           setLicenseKey("");
           router.refresh();
@@ -180,11 +191,21 @@ export default function PlanPage({
 
   return (
       <div className="plan-page mx-auto max-w-[1180px] px-5 pb-12 pt-7 sm:px-8 sm:pt-9 lg:px-10">
+            <Script
+              src="https://app.lemonsqueezy.com/js/lemon.js"
+              strategy="afterInteractive"
+              onReady={() => {
+                window.createLemonSqueezy?.();
+              }}
+              onError={(error) => {
+                console.error("Unable to load Lemon Squeezy checkout script.", error);
+              }}
+            />
             <section aria-labelledby="plan-page-heading" className="plan-hero">
               <div className="plan-hero-copy">
                 <p className="plan-eyebrow">Account billing</p>
                 <h1 id="plan-page-heading">Plan &amp; credits</h1>
-                <p>AppSumo lifetime license and channel credit grants.</p>
+                <p>Manage your AppSumo lifetime license and email credits.</p>
               </div>
               <div className="plan-active">
                 <span aria-hidden="true" className="plan-active-indicator" />
@@ -229,19 +250,6 @@ export default function PlanPage({
                   <p className="plan-stat-footnote">Credits remaining in your plan</p>
                 </article>
 
-                <article className="plan-stat-card">
-                  <div className="plan-stat-heading">
-                    <p>SMS / WhatsApp</p>
-                    <span aria-hidden="true" className="plan-stat-icon plan-stat-icon-sms">
-                      <svg className="size-5" fill="none" viewBox="0 0 24 24">
-                        <path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.52L4 19l.98-4.1A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-                        <path d="M9 9.25c.5 2.1 1.65 3.25 3.75 3.75" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-                      </svg>
-                    </span>
-                  </div>
-                  <p className="plan-stat-value">{smsCreditsRemaining.toLocaleString()} <span>/ {smsCreditLimit.toLocaleString()} credits</span></p>
-                  <p className="plan-stat-footnote">{smsCreditPacksEnabled ? "Available for your current tier" : "Available with Tier 3"}</p>
-                </article>
               </div>
 
               <div className="plan-details-grid">
@@ -283,15 +291,12 @@ export default function PlanPage({
                       <h2 id="usage-heading">Table usage</h2>
                     </div>
                   </div>
-                  <div className="plan-usage-table" role="table" aria-label="Credit usage by channel">
+                  <div className="plan-usage-table" role="table" aria-label="Email credit usage">
                     <div className="plan-usage-row plan-usage-header" role="row">
-                      <span role="columnheader">Channel</span><span role="columnheader">Used</span><span role="columnheader">Available</span>
+                      <span role="columnheader">Email</span><span role="columnheader">Used</span><span role="columnheader">Available</span>
                     </div>
                     <div className="plan-usage-row" role="row">
-                      <span role="cell">Email</span><span role="cell">{creditsUsed.toLocaleString()} / {monthlyCreditLimit.toLocaleString()}</span><strong role="cell">{creditsRemaining.toLocaleString()}</strong>
-                    </div>
-                    <div className="plan-usage-row" role="row">
-                      <span role="cell">SMS / WhatsApp</span><span role="cell">{Math.max(smsCreditLimit - smsCreditsRemaining, 0).toLocaleString()} / {smsCreditLimit.toLocaleString()}</span><strong role="cell">{smsCreditsRemaining.toLocaleString()}</strong>
+                      <span role="cell">Review emails</span><span role="cell">{creditsUsed.toLocaleString()} / {monthlyCreditLimit.toLocaleString()}</span><strong role="cell">{creditsRemaining.toLocaleString()}</strong>
                     </div>
                   </div>
                   <p className="plan-detail-footnote">{entitlement?.plan_tier ?? "No active plan"} · {currentTier?.locations ?? "No locations"} · Lifetime license</p>
@@ -310,7 +315,7 @@ export default function PlanPage({
                 <div className="credit-store-banner-copy">
                   <p className="credit-store-eyebrow">Buy extra credits</p>
                   <h2 id="topup-heading">Buy extra credits</h2>
-                  <p>Add more credits to keep your outreach going. Use them for email and (when available) SMS &amp; WhatsApp campaigns.</p>
+                  <p>Add more credits to keep your email review requests going.</p>
                 </div>
                 <span className="credit-store-expiry">
                   <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24">
@@ -330,55 +335,13 @@ export default function PlanPage({
                     </div>
                     <span className="credit-store-best-value"><span aria-hidden="true">✦</span> Best value for outreach</span>
                   </div>
-                  {renderCreditPacks("email", emailCreditPacks)}
-                  <p aria-live="polite" className={`credit-store-status ${checkoutMessage && selectedCreditPack?.startsWith("email-") ? "credit-store-status-active" : ""}`} role="status">
+                  {renderCreditPacks(emailCreditPacks)}
+                  <p aria-live="polite" className={`credit-store-status ${checkoutMessage ? "credit-store-status-active" : ""}`} role="status">
                     <span aria-hidden="true">ⓘ</span>
-                    {checkoutMessage && selectedCreditPack?.startsWith("email-") ? checkoutMessage : "Online checkout is coming soon. Select a package to see your choice."}
+                    {checkoutMessage || "Test mode is enabled. No real payments will be processed."}
                   </p>
                 </section>
 
-                <section aria-labelledby="sms-credit-packs-heading" className={`credit-store-panel credit-store-sms ${smsCreditPacksEnabled ? "credit-store-sms-enabled" : ""}`}>
-                  <div className="credit-store-panel-heading credit-store-sms-heading">
-                    <span aria-hidden="true" className="credit-store-channel-icon credit-store-sms-icon">
-                      <svg className="size-5" fill="none" viewBox="0 0 24 24">
-                        <path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.52L4 19l.98-4.1A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-                        <path d="M9 9.25c.5 2.1 1.65 3.25 3.75 3.75" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-                      </svg>
-                    </span>
-                    <h3 id="sms-credit-packs-heading">Extra SMS / WhatsApp Credits</h3>
-                    <span className="credit-store-channel-badge">SMS / WhatsApp</span>
-                  </div>
-                  {smsCreditPacksEnabled ? (
-                    <>
-                      {renderCreditPacks("sms", smsCreditPacks)}
-                      <p aria-live="polite" className={`credit-store-status ${checkoutMessage && selectedCreditPack?.startsWith("sms-") ? "credit-store-status-active" : ""}`} role="status">
-                        <span aria-hidden="true">ⓘ</span>
-                        {checkoutMessage && selectedCreditPack?.startsWith("sms-") ? checkoutMessage : "Online checkout is coming soon. Select a package to see your choice."}
-                      </p>
-                    </>
-                  ) : (
-                    <div className="credit-sms-lock">
-                      <div aria-hidden="true" className="credit-sms-illustration">
-                        <span className="credit-sms-spark credit-sms-spark-one">✦</span>
-                        <span className="credit-sms-bubble credit-sms-bubble-blue">
-                          <svg className="size-8" fill="none" viewBox="0 0 24 24">
-                            <path d="M19.5 11.25a7.25 7.25 0 0 1-10.82 6.3L4.5 19l.95-3.97A7.25 7.25 0 1 1 19.5 11.25Z" fill="currentColor" />
-                            <path d="M8.25 10.75h7.5m-7.5 3h5" stroke="white" strokeLinecap="round" strokeWidth="1.3" />
-                          </svg>
-                        </span>
-                        <span className="credit-sms-bubble credit-sms-bubble-green">
-                          <svg className="size-7" fill="none" viewBox="0 0 24 24">
-                            <path d="M19.25 11.5a7.25 7.25 0 0 1-10.82 6.3L4.25 19l.95-3.97A7.25 7.25 0 1 1 19.25 11.5Z" fill="currentColor" />
-                            <path d="M9 8.8c.35 2.55 1.65 3.85 4.2 4.2m-3.3-5.25.9 1.05-.85.9m4.3 4.2.95-.85 1.05.9" stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" />
-                          </svg>
-                        </span>
-                        <span className="credit-sms-spark credit-sms-spark-two">✧</span>
-                      </div>
-                      <p className="credit-sms-upgrade-title">Upgrade to Tier 3 to unlock SMS &amp; WhatsApp credits</p>
-                      <a className="credit-sms-upgrade-link" href="#tiers-heading">View Tier 3 options <span aria-hidden="true">→</span></a>
-                    </div>
-                  )}
-                </section>
               </div>
             </section>
 
@@ -405,9 +368,8 @@ export default function PlanPage({
                       <p className="plan-tier-price">{tier.price}<span>/ lifetime</span></p>
                       <div className="plan-tier-features">
                         <p><strong>{tier.emailCredits}</strong> email credits{tier.name === "Tier 1" ? ", single immediate grant" : ""}</p>
-                        <p><strong>{tier.smsCredits.toLocaleString()}</strong> SMS / WhatsApp credits, initial grant</p>
                         <p>{tier.locations}</p>
-                        <p>Channels: {tier.channels}</p>
+                        <p>Email review requests</p>
                       </div>
                       {isCurrent ? (
                         <p className="plan-tier-included">Included with your AppSumo license</p>

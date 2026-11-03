@@ -1,6 +1,9 @@
 export async function sendReviewEmail(
   requestId: string,
-): Promise<{ ok: true } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; creditsRemaining: number }
+  | { ok: false; message: string }
+> {
   let response: Response;
   try {
     response = await fetch("/api/send-review", {
@@ -13,9 +16,9 @@ export async function sendReviewEmail(
     return { ok: false, message: "The request was created, but we couldn't send its email. Please try again later." };
   }
 
-  let result: { error?: unknown } | null = null;
+  let result: { error?: unknown; creditsRemaining?: unknown } | null = null;
   try {
-    result = await response.json() as { error?: unknown };
+    result = await response.json() as { error?: unknown; creditsRemaining?: unknown };
   } catch (error) {
     console.error("The review email endpoint returned an invalid response.", error);
   }
@@ -29,9 +32,12 @@ export async function sendReviewEmail(
     };
   }
 
-  return { ok: true };
-}
-
-export function isEmailContact(contact: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.trim());
+  if (typeof result?.creditsRemaining !== "number" || !Number.isInteger(result.creditsRemaining)) {
+    console.error("The review email endpoint returned an invalid credit balance.", result);
+    return {
+      ok: false,
+      message: "The email was sent, but we couldn't confirm the updated credit balance. Refresh the page.",
+    };
+  }
+  return { ok: true, creditsRemaining: result.creditsRemaining };
 }

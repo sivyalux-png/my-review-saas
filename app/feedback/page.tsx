@@ -18,13 +18,11 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   const rating = parseRating(firstParam(params.stars)) ?? parseRating(firstParam(params.rating));
   const businessName = firstParam(params.business)?.trim().slice(0, 100) || "Your business";
   const email = firstParam(params.email)?.trim().slice(0, 254) || "";
-  const phone = firstParam(params.phone)?.trim().slice(0, 40) || "";
 
   return (
     <FeedbackForm
       businessName={businessName}
-      initialContact={email || phone}
-      initialContactType={email ? "email" : phone ? "tel" : "text"}
+      initialEmail={email}
       rating={rating}
     />
   );

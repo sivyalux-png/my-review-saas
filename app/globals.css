@@ -533,7 +533,7 @@ main table td {
 
 .plan-stat-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 13px;
 }
 
@@ -591,11 +591,6 @@ main table td {
 
 .plan-stat-icon-email {
   background: linear-gradient(145deg, #d2fbf3, #9ee2d9);
-}
-
-.plan-stat-icon-sms {
-  background: linear-gradient(145deg, #e3f2ff, #c3ddf8);
-  color: #4d89bb;
 }
 
 .plan-stat-value {
@@ -1093,7 +1088,7 @@ main table td {
 
 .credit-store-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 14px;
 }
@@ -1241,10 +1236,6 @@ main table td {
   box-shadow: 0 5px 13px rgba(134, 97, 205, 0.16);
 }
 
-.credit-pack-icon-sms {
-  color: #7358c9;
-}
-
 .credit-pack-copy {
   display: block;
   min-width: 0;
@@ -1356,182 +1347,9 @@ main table td {
   color: #147f88;
 }
 
-.credit-store-sms-heading {
-  justify-content: flex-start;
-  gap: 11px;
-  margin-bottom: 12px;
-}
-
-.credit-store-sms-heading h3 {
-  min-width: 0;
-  margin: 0;
-  font-size: 13px;
-}
-
-.credit-store-channel-icon {
-  display: flex;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  border-radius: 12px;
-  background: linear-gradient(145deg, #f3f2ff, #d9dfff);
-  color: #4c59b5;
-  box-shadow: 0 4px 12px rgba(90, 102, 180, 0.12);
-}
-
-.credit-store-channel-badge {
-  flex: 0 0 auto;
-  margin-left: auto;
-  border: 1px solid rgba(132, 124, 201, 0.16);
-  border-radius: 999px;
-  padding: 5px 8px;
-  background: rgba(244, 242, 255, 0.75);
-  color: #7973a9;
-  font-size: 8px;
-  font-weight: 650;
-  letter-spacing: 0.035em;
-  white-space: nowrap;
-}
-
-.credit-sms-lock {
-  display: flex;
-  min-height: 270px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.63);
-  border-radius: 13px;
-  padding: 18px 15px;
-  background:
-    radial-gradient(ellipse at 50% 43%, rgba(197, 231, 255, 0.66), transparent 42%),
-    radial-gradient(ellipse at 15% 100%, rgba(203, 244, 238, 0.42), transparent 42%),
-    linear-gradient(145deg, rgba(247, 251, 255, 0.78), rgba(235, 244, 255, 0.66));
-  text-align: center;
-}
-
-.credit-sms-illustration {
-  position: relative;
-  display: flex;
-  width: 190px;
-  height: 116px;
-  align-items: center;
-  justify-content: center;
-  margin: -2px 0 5px;
-  isolation: isolate;
-}
-
-.credit-sms-illustration::before,
-.credit-sms-illustration::after {
-  position: absolute;
-  z-index: -1;
-  border: 1px solid rgba(255, 255, 255, 0.66);
-  border-radius: 50%;
-  content: "";
-}
-
-.credit-sms-illustration::before {
-  width: 142px;
-  height: 72px;
-  transform: rotate(-10deg);
-}
-
-.credit-sms-illustration::after {
-  width: 116px;
-  height: 92px;
-  transform: rotate(28deg);
-}
-
-.credit-sms-bubble {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 3px solid rgba(255, 255, 255, 0.78);
-  border-radius: 22px;
-  box-shadow: 0 12px 24px rgba(71, 131, 183, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-}
-
-.credit-sms-bubble-blue {
-  z-index: 1;
-  width: 64px;
-  height: 64px;
-  margin: 0 -5px 11px 0;
-  background: linear-gradient(145deg, #7cbaf4, #4c92de);
-  color: #e8f5ff;
-  transform: rotate(-8deg);
-}
-
-.credit-sms-bubble-green {
-  z-index: 2;
-  width: 59px;
-  height: 59px;
-  margin: 18px 0 0 -3px;
-  border-radius: 20px 20px 20px 8px;
-  background: linear-gradient(145deg, #42d1ab, #12a988);
-  color: #ddfff5;
-  transform: rotate(8deg);
-}
-
-.credit-sms-spark {
-  position: absolute;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(88, 151, 192, 0.34);
-}
-
-.credit-sms-spark-one {
-  top: 19px;
-  right: 24px;
-  font-size: 20px;
-}
-
-.credit-sms-spark-two {
-  bottom: 19px;
-  left: 23px;
-  font-size: 17px;
-}
-
-.credit-sms-upgrade-title {
-  max-width: 310px;
-  color: #1d2b4d;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.4;
-}
-
-.credit-sms-upgrade-link {
-  display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin-top: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.84);
-  border-radius: 999px;
-  padding: 0 20px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(235, 244, 255, 0.78));
-  box-shadow: 0 7px 18px rgba(78, 118, 165, 0.12), inset 0 1px 0 #fff;
-  color: #293c68;
-  font-size: 10px;
-  font-weight: 650;
-  transition: box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease;
-}
-
-.credit-sms-upgrade-link:hover {
-  box-shadow: 0 10px 23px rgba(78, 118, 165, 0.19), inset 0 1px 0 #fff;
-  transform: translateY(-1px);
-}
-
 @media (max-width: 900px) {
   .plan-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .plan-stat-card:last-child {
-    grid-column: 1 / -1;
   }
 
   .plan-tier-grid {
@@ -1543,9 +1361,6 @@ main table td {
     min-height: 280px;
   }
 
-  .credit-store-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 560px) {
@@ -1686,23 +1501,6 @@ main table td {
     font-size: 18px;
   }
 
-  .credit-store-sms-heading {
-    align-items: center;
-    gap: 8px;
-  }
-
-  .credit-store-sms-heading h3 {
-    font-size: 12px;
-  }
-
-  .credit-store-channel-badge {
-    font-size: 7px;
-    padding: 4px 6px;
-  }
-
-  .credit-sms-lock {
-    min-height: 250px;
-  }
 }
 
   .overview-page {
@@ -2641,17 +2439,6 @@ main table td {
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.55);
     color: #6357a2;
-  }
-
-  .settings-sms-locked {
-    border-color: rgba(130, 116, 223, 0.24) !important;
-    border-radius: 11px;
-    background: linear-gradient(125deg, rgba(232, 238, 255, 0.88), rgba(233, 225, 255, 0.88)) !important;
-  }
-
-  .settings-sms-locked > p:first-child {
-    color: #433b79;
-    font-weight: 700;
   }
 
   .settings-preview-aside {

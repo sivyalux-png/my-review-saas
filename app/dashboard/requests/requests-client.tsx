@@ -10,14 +10,14 @@ import {
   importReviewRequests,
   type ReviewRequestImportRow,
 } from "./actions";
-import { isEmailContact, sendReviewEmail } from "./send-review";
+import { sendReviewEmail } from "./send-review";
+import { isValidEmail, type EmailDeliveryStatus } from "../../../lib/review-requests";
 
 type CustomerRequest = {
   id: string;
   name: string;
-  contact: string;
-  service: string;
-  status: string;
+  email: string;
+  status: EmailDeliveryStatus;
 };
 
 type RequestsPageProps = {
@@ -41,28 +41,24 @@ function rowsToRequests(rows: unknown[][]): {
 
   const headers = rows[0].map(normalizeHeader);
   const nameIndex = headers.findIndex((header) => ["name", "customername"].includes(header));
-  const phoneIndex = headers.findIndex((header) => ["phone", "phonenumber", "mobile"].includes(header));
-  const emailIndex = headers.findIndex((header) => header === "email");
-  const contactIndex = headers.findIndex((header) => ["contact", "phoneemail", "emailphone", "phoneoremail", "emailorphone"].includes(header));
-  const serviceIndex = headers.findIndex((header) => ["service", "department", "servicedepartment", "serviceordepartment"].includes(header));
+  const emailIndex = headers.findIndex((header) =>
+    ["email", "customeremail", "emailaddress"].includes(header),
+  );
 
-  if (nameIndex < 0 || (phoneIndex < 0 && emailIndex < 0 && contactIndex < 0) || serviceIndex < 0) {
-    throw new Error("Add Name, Phone or Email, and Service or Department columns to your file.");
+  if (nameIndex < 0 || emailIndex < 0) {
+    throw new Error("Add Customer Name and Customer Email columns to your file.");
   }
 
   let skipped = 0;
   const requests: ReviewRequestImportRow[] = rows.slice(1).flatMap((row) => {
     const name = String(row[nameIndex] ?? "").trim();
-    const contact = [row[contactIndex], row[phoneIndex], row[emailIndex]]
-      .map((value) => String(value ?? "").trim())
-      .find(Boolean) ?? "";
-    const service = String(row[serviceIndex] ?? "").trim();
-    if (!name && !contact && !service) return [];
-    if (!name || !contact || !service || name.length > 120 || contact.length > 254 || service.length > 120) {
+    const email = String(row[emailIndex] ?? "").trim();
+    if (!name && !email) return [];
+    if (!name || !isValidEmail(email) || name.length > 120 || email.length > 254) {
       skipped += 1;
       return [];
     }
-    return [{ name, contact, service }];
+    return [{ name, email }];
   });
 
   if (requests.length === 0) throw new Error("No complete customer rows were found.");
@@ -101,14 +97,14 @@ export default function RequestsClient({
   const [requests, setRequests] = useState<CustomerRequest[]>(initialRequests);
   const requestsSent = Math.max(monthlyCreditLimit - creditsRemaining, 0);
   const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  const [service, setService] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [formMessage, setFormMessage] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploadIsError, setUploadIsError] = useState(false);
+  const [retryingRequestIds, setRetryingRequestIds] = useState<Set<string>>(new Set());
   const fileInput = useRef<HTMLInputElement>(null);
   const usagePercent = monthlyCreditLimit > 0
     ? Math.min((requestsSent / monthlyCreditLimit) * 100, 100)
@@ -128,35 +124,64 @@ export default function RequestsClient({
 
     setFormMessage("Creating request…");
     try {
-      const result = await createReviewRequest(name, contact, "", service);
+      const result = await createReviewRequest(name, customerEmail);
+      if (!result.ok) {
+        setFormMessage(result.message);
+        return;
+      }
+
+      const emailResult = await sendReviewEmail(result.requestId);
+      if (emailResult.ok) setCreditsRemaining(emailResult.creditsRemaining);
+      addRequests([{
+        id: result.requestId,
+        name: name.trim(),
+        email: customerEmail.trim(),
+        status: emailResult.ok ? "sent" : "failed",
+      }]);
+      setFormMessage(emailResult.ok
+        ? `Review email sent to ${customerEmail.trim()}. 1 credit used.`
+        : `The request was saved, but its email was not sent: ${emailResult.message}`);
+      setName("");
+      setCustomerEmail("");
+      router.refresh();
+    } catch (error) {
+      console.error("Unable to create a review request from the Requests page.", error);
+      setFormMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function retryEmail(request: CustomerRequest) {
+    if (creditsRemaining < 1) {
+      setFormMessage("You have no credits available. Activate or top up a plan to continue.");
+      return;
+    }
+
+    setRetryingRequestIds((current) => new Set(current).add(request.id));
+    setFormMessage("");
+    try {
+      const result = await sendReviewEmail(request.id);
       if (!result.ok) {
         setFormMessage(result.message);
         return;
       }
 
       setCreditsRemaining(result.creditsRemaining);
-      const emailResult = isEmailContact(contact)
-        ? await sendReviewEmail(result.requestId)
-        : null;
-      addRequests([{
-        id: result.requestId,
-        name: name.trim(),
-        contact: contact.trim(),
-        service,
-        status: emailResult?.ok ? "sent" : "queued",
-      }]);
-      setFormMessage(emailResult?.ok
-        ? `Review email sent to ${contact.trim()}.`
-        : emailResult
-          ? emailResult.message
-          : `Request queued for ${name.trim()}.`);
-      setName("");
-      setContact("");
-      setService("");
+      setRequests((current) =>
+        current.map((item) =>
+          item.id === request.id ? { ...item, status: "sent" } : item,
+        ),
+      );
+      setFormMessage(`Review email sent to ${request.email}. 1 credit used.`);
       router.refresh();
     } catch (error) {
-      console.error("Unable to create a review request from the Requests page.", error);
-      setFormMessage(error instanceof Error ? error.message : String(error));
+      console.error("Unable to retry a review email.", error);
+      setFormMessage(error instanceof Error ? error.message : "We couldn't send the email. Please try again.");
+    } finally {
+      setRetryingRequestIds((current) => {
+        const next = new Set(current);
+        next.delete(request.id);
+        return next;
+      });
     }
   }
 
@@ -206,20 +231,44 @@ export default function RequestsClient({
       setUploadProgress(96);
       const result = await importReviewRequests(importedRequests);
       if (!result.ok) throw new Error(result.message);
+      const importedRequestIds = result.requestIds;
+      const importedCount = result.importedCount;
 
-      setCreditsRemaining(result.creditsRemaining);
-      addRequests(importedRequests.map((request) => ({
-        id: crypto.randomUUID(),
+      const deliveryStatuses: EmailDeliveryStatus[] = Array(importedRequests.length).fill("queued");
+      let dispatchedCount = 0;
+      let failedCount = 0;
+      let nextRequestIndex = 0;
+
+      async function sendNextRequest() {
+        while (nextRequestIndex < importedRequestIds.length) {
+          const index = nextRequestIndex++;
+          const emailResult = await sendReviewEmail(importedRequestIds[index]);
+          deliveryStatuses[index] = emailResult.ok ? "sent" : "failed";
+          if (emailResult.ok) dispatchedCount += 1;
+          else failedCount += 1;
+        }
+      }
+
+      await Promise.all(
+        Array.from(
+          { length: Math.min(5, importedRequestIds.length) },
+          () => sendNextRequest(),
+        ),
+      );
+
+      setCreditsRemaining((current) => Math.max(current - dispatchedCount, 0));
+      addRequests(importedRequests.map((request, index) => ({
+        id: importedRequestIds[index],
         name: request.name,
-        contact: request.contact,
-        service: request.service,
-        status: "queued",
+        email: request.email,
+        status: deliveryStatuses[index],
       })));
       setUploadProgress(100);
-      const importedMessage = `${result.importedCount} ${result.importedCount === 1 ? "customer" : "customers"} successfully imported and queued`;
+      const deliveryMessage = `${dispatchedCount} of ${importedCount} review emails dispatched; ${failedCount} failed.`;
       setUploadMessage(skipped > 0
-        ? `${importedMessage}; ${skipped} incomplete or invalid ${skipped === 1 ? "row was" : "rows were"} skipped.`
-        : `${importedMessage}.`);
+        ? `${deliveryMessage} ${skipped} incomplete or invalid ${skipped === 1 ? "row was" : "rows were"} skipped.`
+        : deliveryMessage);
+      setUploadIsError(failedCount > 0);
       router.refresh();
     } catch (error) {
       setUploadProgress(0);
@@ -241,7 +290,7 @@ export default function RequestsClient({
                 </svg>
                 Review Requests
               </h1>
-              <p>Invite customers to share feedback after a visit.</p>
+              <p>Invite customers to share feedback by email after a visit.</p>
             </section>
 
             <section aria-labelledby="usage-heading" className="requests-usage mb-5 rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
@@ -268,23 +317,18 @@ export default function RequestsClient({
                   <span aria-hidden="true" className="requests-panel-icon requests-mail-icon"><svg fill="none" viewBox="0 0 24 24"><rect height="14" rx="3" stroke="currentColor" strokeWidth="1.7" width="18" x="3" y="5" /><path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg></span>
                   <div>
                     <h2 id="single-heading">Send one request</h2>
-                    <p>Add a customer and queue their review invitation.</p>
+                    <p>Add a customer and send their review invitation by email.</p>
                   </div>
                 </div>
                 <form className="requests-form space-y-3" onSubmit={submitSingleRequest}>
                   <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Customer name
                     <input autoComplete="name" className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" onChange={(event) => setName(event.target.value)} placeholder="e.g. Jamie Rivera" required value={name} />
                   </label>
-                  <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Phone or email
-                    <input autoComplete="email" className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" onChange={(event) => setContact(event.target.value)} placeholder="Phone or email" required value={contact} />
-                  </label>
-                  <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Service / department
-                    <select className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none focus:border-[#c7f36b]/60" onChange={(event) => setService(event.target.value)} required value={service}>
-                      <option disabled value="">Choose a service</option><option>General</option><option>Clinic visit</option><option>Hair &amp; beauty</option><option>Personal training</option><option>Dining</option><option>Other</option>
-                    </select>
+                  <label className="requests-field block text-[10px] font-medium text-[#b9b8ae]">Customer email
+                    <input autoComplete="email" className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" maxLength={254} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="jamie@example.com" required type="email" value={customerEmail} />
                   </label>
                   <div className="requests-form-actions flex flex-wrap items-center gap-3 pt-1">
-                    <button className="requests-primary inline-flex h-10 items-center gap-2 rounded-[4px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-40" disabled={remainingRequests === 0} type="submit">Queue request <span aria-hidden="true">✓</span></button>
+                    <button className="requests-primary inline-flex h-10 items-center gap-2 rounded-[4px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-40" disabled={remainingRequests === 0} type="submit">Send review email <span aria-hidden="true">↗</span></button>
                     <p aria-live="polite" className="text-[10px] text-[#c7f36b]" role="status">{formMessage}</p>
                   </div>
                 </form>
@@ -312,11 +356,11 @@ export default function RequestsClient({
                   <span aria-hidden="true" className="requests-upload-art"><span className="requests-upload-bubble requests-upload-bubble-blue"><svg fill="none" viewBox="0 0 24 24"><path d="M19.5 11.25a7.25 7.25 0 0 1-10.82 6.3L4.5 19l.95-3.97A7.25 7.25 0 1 1 19.5 11.25Z" fill="currentColor" /><path d="M8.5 10h7m-7 3h5" stroke="white" strokeLinecap="round" strokeWidth="1.3" /></svg></span><span className="requests-upload-bubble requests-upload-bubble-teal"><svg fill="none" viewBox="0 0 24 24"><path d="M19.25 11.5a7.25 7.25 0 0 1-10.82 6.3L4.25 19l.95-3.97A7.25 7.25 0 1 1 19.25 11.5Z" fill="currentColor" /><path d="M9 8.8c.35 2.55 1.65 3.85 4.2 4.2" stroke="white" strokeLinecap="round" strokeWidth="1.3" /></svg></span></span>
                   <span className="requests-dropzone-copy">Drop your file here or <span>browse</span></span>
                   <span className="mt-1.5 text-[9px] text-[#85857c]">CSV or Excel (.xlsx) · Up to 10 MB</span>
-                  <span className="mt-2 text-[9px] text-[#686960]">Columns: Name, Phone or Email, Service or Department</span>
+                  <span className="mt-2 text-[9px] text-[#686960]">Columns: Customer Name, Customer Email</span>
                 </button>
                 {(isImporting || uploadProgress > 0) && (
                   <div className="mt-4" aria-live="polite">
-                    <div className="mb-2 flex justify-between text-[9px] text-[#a5a49a]"><span>{uploadProgress < 96 ? "Reading and validating file" : uploadProgress < 100 ? "Saving requests and credits" : "Import complete"}</span><span>{uploadProgress}%</span></div>
+                    <div className="mb-2 flex justify-between text-[9px] text-[#a5a49a]"><span>{uploadProgress < 96 ? "Reading and validating file" : uploadProgress < 100 ? "Saving requests and sending emails" : "Import complete"}</span><span>{uploadProgress}%</span></div>
                       <div aria-label="File import progress" className="requests-progress-track h-1 overflow-hidden rounded-full" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={uploadProgress}>
                       <div className="requests-progress-value h-full rounded-full transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
                     </div>
@@ -350,10 +394,22 @@ export default function RequestsClient({
                         <span aria-hidden="true" className="requests-queue-avatar">{request.name.trim().charAt(0).toUpperCase()}</span>
                         <span className="min-w-0">
                           <span className="requests-queue-name">{request.name}</span>
-                          <span className="requests-queue-detail">{request.contact}<i aria-hidden="true" />{request.service}</span>
+                          <span className="requests-queue-detail">{request.email}</span>
                         </span>
                       </div>
-                      <span className="requests-status"><i aria-hidden="true" />{request.status}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="requests-status"><i aria-hidden="true" />{request.status}</span>
+                        {(request.status === "queued" || request.status === "failed") && (
+                          <button
+                            className="rounded border border-white/[0.12] px-2.5 py-1.5 text-[9px] font-medium text-[#c7f36b] transition-colors hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-50"
+                            disabled={creditsRemaining < 1 || retryingRequestIds.has(request.id)}
+                            onClick={() => void retryEmail(request)}
+                            type="button"
+                          >
+                            {retryingRequestIds.has(request.id) ? "Sending…" : "Retry email"}
+                          </button>
+                        )}
+                      </div>
                     </article>
                   ))}
                 </div>

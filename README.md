@@ -72,24 +72,27 @@ for persistent review requests, imports, and public customer feedback. Finally,
 apply
 [`supabase/migrations/07_appsumo_channel_entitlements.sql`](./supabase/migrations/07_appsumo_channel_entitlements.sql)
 to grant Tier 1 1,000 email credits, Tier 2 5,000 email credits, and Tier 3
-10,000 email credits plus 500 SMS/WhatsApp credits. Email credits are available
-on all tiers; SMS and WhatsApp are restricted to Tier 3. This migration updates
-the redemption function and backfills existing redeemed licenses while
-preserving previously consumed email credits. Then apply
+10,000 email credits. This migration updates the redemption function and
+backfills existing redeemed licenses while preserving previously consumed
+email credits. Then apply
 [`supabase/migrations/08_reconcile_review_and_entitlement_columns.sql`](./supabase/migrations/08_reconcile_review_and_entitlement_columns.sql)
 to safely add any missing entitlement, settings, license, or review-request
 columns. It is safe to rerun, but does not replace migrations 01–07 or recreate
 their functions and policies. Then run
 [`supabase/migrations/09_review_email_request_id.sql`](./supabase/migrations/09_review_email_request_id.sql)
-to return the created request ID with its updated credit balance. The
-authenticated `/api/send-review` route uses that ID to email email-address
-contacts through Resend and marks the request as `sent`; phone-only contacts
-remain queued. Apply
+to return the created request ID and credit balance. Apply
 [`supabase/migrations/10_fix_review_request_credits_ambiguity.sql`](./supabase/migrations/10_fix_review_request_credits_ambiguity.sql)
 after migration 09 to replace any `create_review_request` overloads with the
-unambiguous, four-parameter function used by the dashboard. The first migration
-creates `profiles`, `licenses`, and `settings`, enables row-level security, and
-automatically creates profiles for new Supabase Auth users.
+unambiguous function used by the dashboard. Apply migrations 11 and 12 for
+business profile settings and private feedback status, then apply
+[`supabase/migrations/13_email_only_review_requests.sql`](./supabase/migrations/13_email_only_review_requests.sql)
+to migrate customer contacts to email addresses, add email-delivery status,
+remove phone/SMS/WhatsApp fields, and update request creation and delivery
+credit accounting. Review requests now require a customer name and email.
+Credits are reserved immediately before Resend dispatch; failed dispatches
+refund the credit, and successful dispatches consume one credit. The first
+migration creates `profiles`, `licenses`, and `settings`, enables row-level
+security, and automatically creates profiles for new Supabase Auth users.
 
 Signup accepts only a key already present in `licenses` with `status = 'available'`
 and a non-expired expiry date. Keys are normalized to uppercase, then checked

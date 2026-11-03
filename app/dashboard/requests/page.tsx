@@ -26,8 +26,9 @@ export default async function RequestsPage() {
       .maybeSingle(),
     supabase
       .from("review_requests")
-      .select("id, customer_name, contact, service, status")
+      .select("id, customer_name, customer_email, email_status")
       .eq("user_id", userId)
+      .not("customer_email", "is", null)
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
@@ -45,9 +46,8 @@ export default async function RequestsPage() {
       initialRequests={(requests ?? []).map((request) => ({
         id: request.id,
         name: request.customer_name,
-        contact: request.contact,
-        service: request.service ?? "",
-        status: request.status,
+        email: request.customer_email ?? "",
+        status: request.email_status,
       }))}
       monthlyCreditLimit={profile?.monthly_credit_limit ?? 0}
     />

@@ -5,18 +5,16 @@ import { useState, type FormEvent } from "react";
 
 type FeedbackFormProps = {
   businessName: string;
-  initialContact: string;
-  initialContactType: "email" | "tel" | "text";
+  initialEmail: string;
   rating: number | null;
 };
 
 export default function FeedbackForm({
   businessName,
-  initialContact,
-  initialContactType,
+  initialEmail,
   rating,
 }: FeedbackFormProps) {
-  const [contact, setContact] = useState(initialContact);
+  const [email, setEmail] = useState(initialEmail);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -86,17 +84,17 @@ export default function FeedbackForm({
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-[11px] font-medium text-[#deddd3]" htmlFor="feedback-contact">Email or phone <span className="font-normal text-[#77786f]">(optional)</span></label>
+                  <label className="mb-2 block text-[11px] font-medium text-[#deddd3]" htmlFor="feedback-email">Email <span className="font-normal text-[#77786f]">(optional)</span></label>
                   <input
-                    autoComplete={initialContactType === "text" ? "off" : initialContactType}
+                    autoComplete="email"
                     className="h-11 w-full rounded-[6px] border border-white/[0.12] bg-[#10110f] px-3.5 text-[13px] text-[#f3f2e9] outline-none transition-colors placeholder:text-[#6e6f65] focus:border-[#c7f36b]/70 focus:ring-2 focus:ring-[#c7f36b]/10"
-                    id="feedback-contact"
+                    id="feedback-email"
                     maxLength={254}
-                    name="contact"
-                    onChange={(event) => setContact(event.target.value)}
+                    name="email"
+                    onChange={(event) => setEmail(event.target.value)}
                     placeholder="So we can follow up with you"
-                    type={initialContactType}
-                    value={contact}
+                    type="email"
+                    value={email}
                   />
                   <p className="mt-2 text-[10px] leading-5 text-[#77786f]">Only share this if you&apos;d like us to get back to you.</p>
                 </div>

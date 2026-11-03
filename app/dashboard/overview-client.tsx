@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Activity, CircleDollarSign, Layers3, Mail, Send, Star, ThumbsUp } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import CreateReviewRequest from "./create-review-request";
 
@@ -11,6 +12,17 @@ type OverviewClientProps = {
   monthlyCreditLimit: number | null;
   creditsRemaining: number | null;
   googleReviewLink: string | null;
+  analytics: {
+    totalSent: number;
+    requestChangePercent: number;
+    conversionRate: number | null;
+    averageRating: number | null;
+    positiveReviews: number;
+    negativeReviews: number;
+    totalReviews: number;
+    trendDays: { label: string; requests: number; reviews: number }[];
+    recentReviews: { customerName: string; rating: number; feedback: string | null; reviewedAt: string }[];
+  };
 };
 
 export default function OverviewClient({
@@ -20,6 +32,7 @@ export default function OverviewClient({
   monthlyCreditLimit: savedMonthlyCreditLimit,
   creditsRemaining: savedCreditsRemaining,
   googleReviewLink,
+  analytics,
 }: OverviewClientProps) {
   const [businessName, setBusinessName] = useState(savedBusinessName ?? "");
   const [industry, setIndustry] = useState("Other local business");
@@ -30,42 +43,43 @@ export default function OverviewClient({
   const [creditsRemaining, setCreditsRemaining] = useState(savedCreditsRemaining ?? 0);
   const creditsUsed = Math.max(monthlyCreditLimit - creditsRemaining, 0);
   const greetingName = fullName?.trim().split(/\s+/)[0] || "there";
-
+  const ratedReviews = analytics.positiveReviews + analytics.negativeReviews;
+  const positivePercent = ratedReviews
+    ? (analytics.positiveReviews / ratedReviews) * 100
+    : 0;
+  const negativePercent = ratedReviews ? 100 - positivePercent : 0;
+  const maxTrendCount = Math.max(
+    1,
+    ...analytics.trendDays.flatMap((day) => [day.requests, day.reviews]),
+  );
   const metrics = [
     {
-      label: "Available Credits",
-      value: creditsRemaining.toLocaleString(),
-      detail: `of ${monthlyCreditLimit.toLocaleString()} initial email credits`,
-      mark: "◇",
-      theme: "email",
+      label: "Total Requests Sent",
+      value: analytics.totalSent.toLocaleString(),
+      detail: `${analytics.requestChangePercent > 0 ? "+" : ""}${analytics.requestChangePercent}% vs. last month`,
+      icon: <Send aria-hidden="true" size={16} />,
+      theme: "requests",
     },
     {
-      label: "Used Credits",
-      value: creditsUsed.toLocaleString(),
-      detail: "Email credits used",
-      mark: "↗",
+      label: "Conversion Rate",
+      value: analytics.conversionRate === null ? "—" : `${analytics.conversionRate.toFixed(1)}%`,
+      detail: `${analytics.totalReviews.toLocaleString()} reviews from sent requests`,
+      icon: <Activity aria-hidden="true" size={16} />,
       theme: "usage",
     },
     {
-      label: "Current Plan",
-      value: planTier ?? "No plan",
-      detail: planTier ? "Active license" : "Redeem a license to activate",
-      mark: "✦",
+      label: "Average Rating",
+      value: analytics.averageRating === null ? "—" : `${analytics.averageRating.toFixed(1)} / 5.0`,
+      detail: `${analytics.totalReviews.toLocaleString()} submitted reviews`,
+      icon: <Star aria-hidden="true" size={16} />,
       theme: "plan",
     },
     {
-      label: "Total Reviews",
-      value: "0",
-      detail: "No review records yet",
-      mark: "✧",
+      label: "Positive / Negative",
+      value: `${analytics.positiveReviews} / ${analytics.negativeReviews}`,
+      detail: "Positive (4–5★) / Negative (1–3★)",
+      icon: <ThumbsUp aria-hidden="true" size={16} />,
       theme: "reviews",
-    },
-    {
-      label: "Requests Sent",
-      value: "0",
-      detail: "No requests recorded yet",
-      mark: "↗",
-      theme: "requests",
     },
   ];
 
@@ -108,45 +122,107 @@ export default function OverviewClient({
               />
             </section>
 
-            <section aria-label="Account and activity summary" className="overview-metrics grid grid-cols-2 gap-3 lg:grid-cols-5 xl:gap-4">
+            <section aria-label="Review performance summary" className="overview-metrics grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
               {metrics.map((metric) => (
-                <article className={`overview-metric overview-metric-${metric.theme} min-w-0 rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5`} id={metric.label === "Requests Sent" ? "request-metrics" : undefined} key={metric.label}>
+                <article className={`overview-metric overview-metric-${metric.theme} min-w-0 rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5`} id={metric.label === "Total Requests Sent" ? "request-metrics" : undefined} key={metric.label}>
                   <div className="overview-metric-heading flex items-center justify-between gap-2">
                     <p className="truncate text-[10px] font-medium text-[#526276] sm:text-[11px]">{metric.label}</p>
-                    <span aria-hidden="true" className="overview-metric-icon flex size-8 shrink-0 items-center justify-center rounded-xl border border-white/80 text-[13px]">{metric.mark}</span>
+                    <span aria-hidden="true" className="overview-metric-icon flex size-8 shrink-0 items-center justify-center rounded-xl border border-white/80 text-[13px]">{metric.icon}</span>
                   </div>
-                  <p className={`overview-metric-value mt-4 truncate font-semibold leading-tight ${metric.label === "Current Plan" ? "text-[20px]" : "text-[26px] sm:text-[30px]"}`}>{metric.value}</p>
+                  <p className="overview-metric-value mt-4 truncate font-semibold leading-tight text-[26px] sm:text-[30px]">{metric.value}</p>
                   <p className="mt-3 min-h-9 text-[9px] leading-5 text-[#526276]">{metric.detail}</p>
                 </article>
               ))}
             </section>
 
+            <section aria-label="Account plan and credits" className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                { label: "Available Credits", value: creditsRemaining.toLocaleString(), detail: `of ${monthlyCreditLimit.toLocaleString()} email credits` },
+                { label: "Used Credits", value: creditsUsed.toLocaleString(), detail: "Email credits used" },
+                { label: "Current Plan", value: planTier ?? "No plan", detail: planTier ? "Active license" : "Redeem a license to activate" },
+              ].map((item) => (
+                <article className="rounded-[6px] border border-white/[0.09] bg-[#171814] px-4 py-3" key={item.label}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-medium text-[#526276]">{item.label}</p>
+                    <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[#172033]">{item.label === "Available Credits" ? <Mail aria-hidden="true" size={14} /> : item.label === "Used Credits" ? <CircleDollarSign aria-hidden="true" size={14} /> : <Layers3 aria-hidden="true" size={14} />}{item.value}</span>
+                  </div>
+                  <p className="mt-1 text-[9px] text-[#526276]">{item.detail}</p>
+                </article>
+              ))}
+            </section>
+
             <div className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(270px,0.8fr)]">
-              <section aria-labelledby="reviews-heading" className="overview-panel overflow-hidden rounded-[6px] border border-white/[0.09] bg-[#171814]" id="reviews">
-                <div className="overview-panel-header flex items-center justify-between gap-4 border-b border-white/[0.08] px-4 py-4 sm:px-5">
-                  <div><h2 className="text-[13px] font-medium text-[#f0efe7]" id="reviews-heading">Recent reviews</h2><p className="mt-1 text-[10px] text-[#85857c]">Reviews recorded for your workspace</p></div>
-                  <span className="rounded-full border border-slate-300/70 bg-white/50 px-3 py-1 text-[9px] font-medium text-slate-700">0 recorded</span>
+              <section aria-labelledby="performance-heading" className="overview-panel rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div><h2 id="performance-heading">Review activity</h2><p className="mt-1 text-[10px] text-[#85857c]">Requests sent and reviews submitted · last 7 days</p></div>
+                  <span className="rounded-full border border-slate-300/70 bg-white/50 px-3 py-1 text-[9px] font-medium text-slate-700">{analytics.totalReviews} reviews</span>
                 </div>
-                <div className="overview-empty flex min-h-44 flex-col items-center justify-center px-6 py-8 text-center">
-                  <span aria-hidden="true" className="overview-empty-icon flex size-11 items-center justify-center rounded-2xl border border-white/80 text-xl">✧</span>
-                  <p className="mt-4 text-sm font-semibold text-slate-800">No reviews recorded yet</p>
-                  <p className="mt-2 max-w-sm text-xs leading-5 text-slate-600">Review activity will appear here when review records are connected to your workspace.</p>
+                <div aria-label="Bar chart of review requests and submitted reviews over the last seven days" className="mt-5">
+                  <div className="flex h-40 items-end justify-around gap-2 border-b border-slate-300/50 px-1">
+                    {analytics.trendDays.map((day) => (
+                      <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2" key={day.label}>
+                        <div className="flex h-[calc(100%-25px)] w-full max-w-12 items-end justify-center gap-1">
+                          <span aria-label={`${day.requests} requests`} className="w-2.5 rounded-t bg-sky-400" style={{ height: `${Math.max(day.requests ? (day.requests / maxTrendCount) * 100 : 0, day.requests ? 5 : 0)}%` }} />
+                          <span aria-label={`${day.reviews} reviews`} className="w-2.5 rounded-t bg-emerald-500" style={{ height: `${Math.max(day.reviews ? (day.reviews / maxTrendCount) * 100 : 0, day.reviews ? 5 : 0)}%` }} />
+                        </div>
+                        <span className="text-[9px] text-slate-500">{day.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-4 text-[9px] text-slate-600">
+                    <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-sky-400" />Requests sent</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-emerald-500" />Reviews submitted</span>
+                  </div>
                 </div>
               </section>
 
-              <section aria-labelledby="performance-heading" className="overview-panel rounded-[6px] border border-white/[0.09] bg-[#171814] p-4">
-                <div><h2 className="text-[13px] font-medium text-[#f0efe7]" id="performance-heading">Review activity</h2><p className="mt-1 text-[10px] text-[#85857c]">Review records for your workspace</p></div>
-                <div aria-label="Review activity chart. No activity recorded yet." className="overview-empty overview-chart mt-4 flex h-[156px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300/70 bg-white/25 px-5 text-center">
-                  <div aria-hidden="true" className="overview-empty-icon flex size-11 items-center justify-center rounded-2xl border border-white/80">
-                    <svg className="size-6" fill="none" viewBox="0 0 24 24">
-                      <path d="M4 19.5h16M6.5 16v-4m5 4V6m5 10v-6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
-                    </svg>
+              <section aria-labelledby="sentiment-heading" className="overview-panel rounded-[6px] border border-white/[0.09] bg-[#171814] p-4 sm:p-5">
+                <h2 id="sentiment-heading">Review sentiment</h2>
+                <p className="mt-1 text-[10px] text-[#85857c]">Ratings from submitted reviews</p>
+                <div aria-label={`${analytics.positiveReviews} positive reviews and ${analytics.negativeReviews} negative reviews`} className="mt-6">
+                  <div className="flex h-3 overflow-hidden rounded-full bg-slate-200">
+                    <span className="bg-emerald-500 transition-[width]" style={{ width: `${positivePercent}%` }} />
+                    <span className="bg-rose-400 transition-[width]" style={{ width: `${negativePercent}%` }} />
                   </div>
-                  <p className="mt-4 text-sm font-semibold text-slate-700">No activity recorded yet</p>
-                  <p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">The chart will fill in when review records are connected to your workspace.</p>
+                  <div className="mt-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="inline-flex items-center gap-2 text-slate-600"><span className="size-2.5 rounded-full bg-emerald-500" />Positive · 4–5 stars</span>
+                      <strong className="text-slate-800">{analytics.positiveReviews} <span className="font-normal text-slate-500">({positivePercent.toFixed(0)}%)</span></strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="inline-flex items-center gap-2 text-slate-600"><span className="size-2.5 rounded-full bg-rose-400" />Negative · 1–3 stars</span>
+                      <strong className="text-slate-800">{analytics.negativeReviews} <span className="font-normal text-slate-500">({negativePercent.toFixed(0)}%)</span></strong>
+                    </div>
+                  </div>
                 </div>
               </section>
             </div>
+
+            <section aria-labelledby="reviews-heading" className="overview-panel mt-5 overflow-hidden rounded-[6px] border border-white/[0.09] bg-[#171814]" id="reviews">
+              <div className="overview-panel-header flex items-center justify-between gap-4 border-b border-white/[0.08] px-4 py-4 sm:px-5">
+                <div><h2 id="reviews-heading">Recent reviews</h2><p className="mt-1 text-[10px] text-[#85857c]">Latest ratings recorded for your workspace</p></div>
+                <span className="rounded-full border border-slate-300/70 bg-white/50 px-3 py-1 text-[9px] font-medium text-slate-700">{analytics.totalReviews} recorded</span>
+              </div>
+              {analytics.recentReviews.length ? (
+                <ul className="divide-y divide-slate-200/60 px-4 sm:px-5">
+                  {analytics.recentReviews.map((review, index) => (
+                    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4" key={`${review.reviewedAt}-${index}`}>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-[#deddd3]">{review.customerName}</p>
+                        <span className="mt-1 inline-block text-sm tracking-wide text-amber-500" aria-label={`${review.rating} out of 5 stars`}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span>
+                        {review.feedback && <p className="mt-1 break-words text-[11px] leading-5 text-[#aaa99f]">{review.feedback}</p>}
+                      </div>
+                      <time className="shrink-0 text-[10px] text-slate-500" dateTime={review.reviewedAt}>{new Date(review.reviewedAt).toLocaleDateString()}</time>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="overview-empty flex min-h-32 flex-col items-center justify-center px-6 py-7 text-center">
+                  <p className="text-sm font-semibold text-slate-800">No reviews recorded yet</p>
+                  <p className="mt-2 max-w-sm text-xs leading-5 text-slate-600">Review ratings will appear here when customers submit feedback.</p>
+                </div>
+              )}
+            </section>
 
             <section aria-labelledby="qr-heading" className="overview-qr mt-5 overflow-hidden rounded-[6px] border border-white/[0.09] bg-[#171814]" id="qr-generator">
               <div className="overview-qr-header border-b border-white/[0.08] px-4 py-4 sm:px-5">
