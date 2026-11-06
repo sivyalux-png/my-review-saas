@@ -29,6 +29,10 @@ type RequestsPageProps = {
 const maximumFileSize = 10 * 1024 * 1024;
 const maximumImportRows = 200;
 
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 function normalizeHeader(value: unknown) {
   return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -237,24 +241,16 @@ export default function RequestsClient({
       const deliveryStatuses: EmailDeliveryStatus[] = Array(importedRequests.length).fill("queued");
       let dispatchedCount = 0;
       let failedCount = 0;
-      let nextRequestIndex = 0;
+      for (let index = 0; index < importedRequestIds.length; index += 1) {
+        const emailResult = await sendReviewEmail(importedRequestIds[index]);
+        deliveryStatuses[index] = emailResult.ok ? "sent" : "failed";
+        if (emailResult.ok) dispatchedCount += 1;
+        else failedCount += 1;
 
-      async function sendNextRequest() {
-        while (nextRequestIndex < importedRequestIds.length) {
-          const index = nextRequestIndex++;
-          const emailResult = await sendReviewEmail(importedRequestIds[index]);
-          deliveryStatuses[index] = emailResult.ok ? "sent" : "failed";
-          if (emailResult.ok) dispatchedCount += 1;
-          else failedCount += 1;
+        if (index < importedRequestIds.length - 1) {
+          await sleep(1000);
         }
       }
-
-      await Promise.all(
-        Array.from(
-          { length: Math.min(5, importedRequestIds.length) },
-          () => sendNextRequest(),
-        ),
-      );
 
       setCreditsRemaining((current) => Math.max(current - dispatchedCount, 0));
       addRequests(importedRequests.map((request, index) => ({

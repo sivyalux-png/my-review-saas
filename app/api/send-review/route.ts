@@ -1,5 +1,8 @@
 import { createAdminClient } from "../../../lib/supabase/admin";
 import { createClient } from "../../../lib/supabase/server";
+import { verifyEmailAddress } from "../../../lib/emailVerifier";
+
+export const runtime = "nodejs";
 
 const requestIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -70,8 +73,12 @@ export async function POST(request: Request) {
   ) {
     return Response.json({ error: "This review request has already been sent or completed." }, { status: 409 });
   }
-  if (!reviewRequest.customer_email || !emailPattern.test(reviewRequest.customer_email)) {
+  if (!reviewRequest.customer_email) {
     return Response.json({ error: "This review request does not contain a valid email address." }, { status: 400 });
+  }
+  const emailVerification = await verifyEmailAddress(reviewRequest.customer_email);
+  if (!emailVerification.isValid) {
+    return Response.json({ error: emailVerification.reason }, { status: 400 });
   }
 
   const [settingsResult, profileResult] = await Promise.all([
