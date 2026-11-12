@@ -1,8 +1,9 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { saveReviewSettings, update_business_settings } from "./actions";
+import { saveReviewSettings } from "./actions";
 
 const businessTypes = [
   "Clinic",
@@ -43,10 +44,9 @@ export type ReviewSettings = {
   emailBody: string;
 };
 
-const defaultSettings: ReviewSettings = {
+const defaultSettings: Omit<ReviewSettings, "googleReviewLink"> = {
   businessName: "",
   businessCategory: "",
-  googleReviewLink: "",
   privateFeedbackUrl: "",
   emailSubject: "A quick favor, {Customer_Name}?",
   emailBody: `Hi {Customer_Name},\n\nThanks for choosing {Business_Name}. If you have a moment, would you share how your visit went? Your feedback helps our team and other people in the community.\n\n${starRatingWidgetToken}\n\nThank you,\nThe {Business_Name} team`,
@@ -57,11 +57,12 @@ export default function SettingsClient({
 }: {
   initialSettings: Partial<ReviewSettings>;
 }) {
+  const router = useRouter();
   const [businessName, setBusinessName] = useState(initialSettings.businessName ?? defaultSettings.businessName);
   const [businessCategory, setBusinessCategory] = useState(
     initialSettings.businessCategory || "Other local business",
   );
-  const [googleReviewLink, setGoogleReviewLink] = useState(initialSettings.googleReviewLink ?? defaultSettings.googleReviewLink);
+  const [googleReviewLink, setGoogleReviewLink] = useState(initialSettings.googleReviewLink ?? "");
   const [privateFeedbackUrl, setPrivateFeedbackUrl] = useState(initialSettings.privateFeedbackUrl ?? defaultSettings.privateFeedbackUrl);
   const [emailSubject, setEmailSubject] = useState(initialSettings.emailSubject ?? defaultSettings.emailSubject);
   const [emailBody, setEmailBody] = useState(initialSettings.emailBody ?? defaultSettings.emailBody);
@@ -70,10 +71,11 @@ export default function SettingsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [qrMessage, setQrMessage] = useState("");
   useEffect(() => {
-    if (!saveMessage) return;
-    const timeout = window.setTimeout(() => setSaveMessage(""), 5000);
-    return () => window.clearTimeout(timeout);
-  }, [saveMessage]);
+    // Server refreshes replace these persisted values; synchronize their controlled inputs.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBusinessCategory(initialSettings.businessCategory || "Other local business");
+    setGoogleReviewLink(initialSettings.googleReviewLink ?? "");
+  }, [initialSettings.businessCategory, initialSettings.googleReviewLink]);
   useEffect(() => {
     if (!qrMessage) return;
     const timeout = window.setTimeout(() => setQrMessage(""), 3000);
@@ -99,17 +101,6 @@ export default function SettingsClient({
     setSaveMessage("");
     setSaveFailed(false);
     try {
-      const businessResult = await update_business_settings({
-        businessName,
-        businessCategory,
-        googleReviewLink,
-      });
-      if (!businessResult.ok) {
-        setSaveMessage(businessResult.message);
-        setSaveFailed(true);
-        return;
-      }
-
       const result = await saveReviewSettings({
         businessName,
         businessCategory,
@@ -118,11 +109,24 @@ export default function SettingsClient({
         emailSubject,
         emailBody,
       });
+      if (!result.ok) {
+        setSaveMessage(result.message);
+        setSaveFailed(true);
+        return;
+      }
+
+      setBusinessCategory(result.businessCategory || "Other local business");
+      setGoogleReviewLink(result.googleReviewLink);
       setSaveMessage(result.message);
-      setSaveFailed(!result.ok);
+      setSaveFailed(false);
+      router.refresh();
     } catch (error) {
       console.error("Unable to save review settings.", error);
-      setSaveMessage("We couldn't save your settings right now. Please try again.");
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "We couldn't save your settings right now. Please try again.",
+      );
       setSaveFailed(true);
     } finally {
       setIsSaving(false);
@@ -182,7 +186,7 @@ export default function SettingsClient({
 
   return (
       <div className="settings-page mx-auto max-w-[1380px] px-5 pb-12 pt-7 sm:px-8 sm:pt-9 lg:px-10">
-            <form onSubmit={saveSettings}>
+            <form noValidate onSubmit={saveSettings}>
               <section className="settings-hero mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                 <div>
                   <p className="settings-eyebrow">Workspace preferences</p>

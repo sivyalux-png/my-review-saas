@@ -11,6 +11,15 @@ export async function createClient() {
       getAll() {
         return cookieStore.getAll();
       },
+      setAll(cookiesToSet) {
+        try {
+          for (const { name, value, options } of cookiesToSet) {
+            cookieStore.set(name, value, options);
+          }
+        } catch {
+          // Server Components cannot write cookies; middleware and Server Actions can.
+        }
+      },
     },
   });
 }

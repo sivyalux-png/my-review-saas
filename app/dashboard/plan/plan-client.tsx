@@ -1,21 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Script from "next/script";
-import { createTestCreditPackCheckout, redeemLicenseKey } from "./actions";
+import { CheckoutEventNames, initializePaddle, type Paddle } from "@paddle/paddle-js";
+import { createEmailCreditPackPurchase, redeemLicenseKey } from "./actions";
+import { emailCreditPacks } from "../../../lib/email-credit-packs";
 import { appSumoTiers, getTierEntitlement } from "../../../lib/entitlements";
-
-declare global {
-  interface Window {
-    createLemonSqueezy?: () => void;
-    LemonSqueezy?: {
-      Url?: {
-        Open?: (url: string) => void;
-      };
-    };
-  }
-}
 
 type PlanEntitlement = {
   plan_tier: string | null;
@@ -24,17 +14,20 @@ type PlanEntitlement = {
 };
 
 type CreditPack = {
+  priceId: keyof typeof emailCreditPacks;
   credits: number;
   price: number;
   label: string;
-  variantId: number;
 };
 
-const emailCreditPacks: CreditPack[] = [
-  { credits: 500, price: 9, label: "Quick top-up", variantId: 2307965 },
-  { credits: 1500, price: 24, label: "Most popular", variantId: 2308009 },
-  { credits: 5000, price: 69, label: "Best value", variantId: 2308025 },
-];
+const creditPacks: CreditPack[] = Object.entries(emailCreditPacks).map(
+  ([priceId, pack]) => ({
+    priceId: priceId as keyof typeof emailCreditPacks,
+    ...pack,
+  }),
+);
+const paddleEnvironment = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT;
+const paddleClientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
 
 const tiers = appSumoTiers.map((tier) => ({
   name: tier.name,
@@ -49,6 +42,7 @@ export default function PlanPage({
   initialEntitlement: PlanEntitlement | null;
 }) {
   const router = useRouter();
+  const paddleRef = useRef<Paddle | undefined>(undefined);
   const [licenseKey, setLicenseKey] = useState("");
   const [redemptionMessage, setRedemptionMessage] = useState("");
   const [isKeyValid, setIsKeyValid] = useState(false);
@@ -56,7 +50,74 @@ export default function PlanPage({
   const [isCheckoutPending, startCheckout] = useTransition();
   const [entitlement, setEntitlement] = useState(initialEntitlement);
   const [selectedCreditPack, setSelectedCreditPack] = useState<string | null>(null);
+  const [preparedPurchase, setPreparedPurchase] = useState<{
+    priceId: keyof typeof emailCreditPacks;
+    purchaseId: string;
+  } | null>(null);
   const [checkoutMessage, setCheckoutMessage] = useState("");
+  const [isPaddleReady, setIsPaddleReady] = useState(false);
+
+  useEffect(() => {
+    if (!paddleClientToken || (paddleEnvironment !== "sandbox" && paddleEnvironment !== "production")) {
+      return;
+    }
+
+    let active = true;
+    void initializePaddle({
+      token: paddleClientToken,
+      environment: paddleEnvironment,
+      eventCallback: (event) => {
+        if (event.name === CheckoutEventNames.CHECKOUT_COMPLETED) {
+          setCheckoutMessage("Payment complete. Your email credit balance is updating.");
+          window.setTimeout(() => router.refresh(), 1500);
+        } else if (
+          event.name === CheckoutEventNames.CHECKOUT_ERROR ||
+          event.name === CheckoutEventNames.CHECKOUT_PAYMENT_ERROR
+        ) {
+          const isPaymentError =
+            event.name === CheckoutEventNames.CHECKOUT_PAYMENT_ERROR;
+          console.error(
+            isPaymentError
+              ? "Paddle checkout reported a payment error."
+              : "Paddle checkout reported a checkout error.",
+            {
+              name: event.name,
+              type: event.type,
+              code: event.code,
+              detail: event.detail,
+              documentationUrl: event.documentation_url,
+              returnedPriceIds: event.data?.items?.map((item) => item.price_id),
+            },
+          );
+          setCheckoutMessage(
+            event.detail ||
+              (isPaymentError
+                ? "Paddle couldn't process the sandbox payment. Check the sandbox payment method and Paddle event details."
+                : "Paddle couldn't load checkout. Please verify the sandbox client token and product configuration."),
+          );
+        }
+      },
+    })
+      .then((paddle) => {
+        if (active && paddle) {
+          paddleRef.current = paddle;
+          setIsPaddleReady(true);
+        } else if (active) {
+          console.error("Paddle initialization returned no instance.");
+          setCheckoutMessage("Checkout couldn't be initialized. Please verify the sandbox client token.");
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Unable to initialize Paddle checkout.", error);
+        if (active) {
+          setCheckoutMessage("Checkout couldn't be loaded. Please try again later.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const monthlyCreditLimit = entitlement?.monthly_credit_limit ?? 0;
   const creditsRemaining = entitlement?.credits_remaining ?? 0;
@@ -65,6 +126,30 @@ export default function PlanPage({
   const usagePercent = monthlyCreditLimit > 0
     ? Math.min((creditsUsed / monthlyCreditLimit) * 100, 100)
     : 0;
+
+  function prepareCreditPackCheckout(pack: CreditPack, packId: string) {
+    setSelectedCreditPack(packId);
+    setPreparedPurchase(null);
+    setCheckoutMessage("Preparing your secure checkout...");
+    startCheckout(async () => {
+      try {
+        const result = await createEmailCreditPackPurchase(pack.priceId);
+        if (!result.ok) {
+          setCheckoutMessage(result.message);
+          return;
+        }
+
+        setPreparedPurchase({
+          priceId: pack.priceId,
+          purchaseId: result.purchaseId,
+        });
+        setCheckoutMessage("Checkout is ready. Click Checkout to continue.");
+      } catch (error) {
+        console.error("Unable to prepare Paddle checkout.", error);
+        setCheckoutMessage("We couldn't prepare checkout. Please try again.");
+      }
+    });
+  }
 
   function renderCreditPacks(packs: CreditPack[], disabled = false) {
     return (
@@ -82,9 +167,15 @@ export default function PlanPage({
               <button
                 aria-pressed={isSelected}
                 className="credit-pack-select"
-                disabled={disabled}
+                disabled={disabled || isCheckoutPending}
                 onClick={() => {
-                  setSelectedCreditPack(packId);
+                  if (preparedPurchase?.priceId === pack.priceId) {
+                    setSelectedCreditPack(packId);
+                    setCheckoutMessage("Checkout is ready. Click Checkout to continue.");
+                    return;
+                  }
+
+                  prepareCreditPackCheckout(pack, packId);
                 }}
                 type="button"
               >
@@ -110,37 +201,39 @@ export default function PlanPage({
                 <span className="credit-pack-price">${pack.price}</span>
                 <button
                   aria-label={`Checkout for ${pack.credits.toLocaleString()} extra email credits`}
-                  className="credit-pack-checkout lemonsqueezy-button"
-                  disabled={disabled || isCheckoutPending}
+                  className="credit-pack-checkout"
+                  disabled={
+                    disabled ||
+                    isCheckoutPending ||
+                    !isPaddleReady
+                  }
                   onClick={() => {
-                    setSelectedCreditPack(packId);
                     setCheckoutMessage("");
-                    startCheckout(async () => {
-                      try {
-                        const result = await createTestCreditPackCheckout(pack.variantId);
-                        if (!result.ok) {
-                          setCheckoutMessage(result.message);
-                          return;
-                        }
+                    const paddle = paddleRef.current;
+                    const purchase = preparedPurchase;
+                    if (!paddle) {
+                      setCheckoutMessage("Checkout is still loading. Please try again.");
+                      return;
+                    }
 
-                        if (window.LemonSqueezy?.Url?.Open) {
-                          try {
-                            window.LemonSqueezy.Url.Open(result.url);
-                            setCheckoutMessage("Opening secure test checkout...");
-                            return;
-                          } catch (error) {
-                            console.error("Unable to open Lemon Squeezy checkout overlay.", error);
-                          }
-                        }
+                    if (!purchase || purchase.priceId !== pack.priceId) {
+                      prepareCreditPackCheckout(pack, packId);
+                      return;
+                    }
 
-                        const hostedCheckoutUrl = new URL(result.url);
-                        hostedCheckoutUrl.searchParams.delete("embed");
-                        window.location.assign(hostedCheckoutUrl.toString());
-                      } catch (error) {
-                        console.error("Unable to start Lemon Squeezy test checkout.", error);
-                        setCheckoutMessage("We couldn't start checkout. Please try again.");
-                      }
-                    });
+                    try {
+                      paddle.Checkout.open({
+                        items: [{ priceId: pack.priceId, quantity: 1 }],
+                        customData: {
+                          email_credit_purchase_id: purchase.purchaseId,
+                        },
+                        settings: { displayMode: "overlay" },
+                      });
+                      setCheckoutMessage("Opening secure checkout...");
+                    } catch (error) {
+                      console.error("Unable to start Paddle checkout.", error);
+                      setCheckoutMessage("We couldn't start checkout. Please try again.");
+                    }
                   }}
                   type="button"
                 >
@@ -191,16 +284,6 @@ export default function PlanPage({
 
   return (
       <div className="plan-page mx-auto max-w-[1180px] px-5 pb-12 pt-7 sm:px-8 sm:pt-9 lg:px-10">
-            <Script
-              src="https://app.lemonsqueezy.com/js/lemon.js"
-              strategy="afterInteractive"
-              onReady={() => {
-                window.createLemonSqueezy?.();
-              }}
-              onError={(error) => {
-                console.error("Unable to load Lemon Squeezy checkout script.", error);
-              }}
-            />
             <section aria-labelledby="plan-page-heading" className="plan-hero">
               <div className="plan-hero-copy">
                 <p className="plan-eyebrow">Account billing</p>
@@ -335,10 +418,16 @@ export default function PlanPage({
                     </div>
                     <span className="credit-store-best-value"><span aria-hidden="true">✦</span> Best value for outreach</span>
                   </div>
-                  {renderCreditPacks(emailCreditPacks)}
+                  {renderCreditPacks(creditPacks)}
                   <p aria-live="polite" className={`credit-store-status ${checkoutMessage ? "credit-store-status-active" : ""}`} role="status">
                     <span aria-hidden="true">ⓘ</span>
-                    {checkoutMessage || "Test mode is enabled. No real payments will be processed."}
+                    {checkoutMessage || (!paddleClientToken
+                      ? "Checkout is not configured. Please contact support."
+                      : paddleEnvironment !== "sandbox" && paddleEnvironment !== "production"
+                        ? "Set NEXT_PUBLIC_PADDLE_ENVIRONMENT to sandbox or production to enable checkout."
+                      : paddleEnvironment === "sandbox"
+                        ? "Sandbox mode is enabled. No real payments will be processed."
+                        : "Secure checkout is provided by Paddle.")}
                   </p>
                 </section>
 

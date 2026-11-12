@@ -93,6 +93,24 @@ Credits are reserved immediately before Resend dispatch; failed dispatches
 refund the credit, and successful dispatches consume one credit. The first
 migration creates `profiles`, `licenses`, and `settings`, enables row-level
 security, and automatically creates profiles for new Supabase Auth users.
+Apply
+[`supabase/migrations/17_paddle_email_credit_purchases.sql`](./supabase/migrations/17_paddle_email_credit_purchases.sql)
+to enable Paddle email-credit purchase fulfillment.
+
+## Paddle email credit checkout
+
+Set `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` to the client-side token from Paddle and
+`NEXT_PUBLIC_PADDLE_ENVIRONMENT` to `sandbox` (or `production` after configuring
+the corresponding Paddle catalog). Set `PADDLE_WEBHOOK_SECRET` to the secret
+for a Paddle notification destination pointing to
+`/api/webhooks/paddle`, subscribed to `transaction.completed`. Keep the webhook
+secret server-only. Configure the matching token, environment, and webhook
+destination separately for each deployment environment.
+
+Credit pack checkouts create an authenticated, single-use purchase intent. The
+signed Paddle webhook verifies the completed transaction and price before an
+atomic database function grants credits; duplicate webhook deliveries do not
+grant the same purchase twice.
 
 Signup accepts only a key already present in `licenses` with `status = 'available'`
 and a non-expired expiry date. Keys are normalized to uppercase, then checked

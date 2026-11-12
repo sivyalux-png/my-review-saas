@@ -4,88 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "../../../lib/supabase/server";
 import type { ReviewSettings } from "./settings-client";
 
-type SaveSettingsResult = {
-  ok: boolean;
-  message: string;
-};
-
-export type BusinessSettings = {
-  businessName: string;
-  businessCategory: string;
-  googleReviewLink: string;
-};
-
-type UpdateBusinessSettingsResult = {
-  ok: boolean;
-  message: string;
-};
-
-export async function update_business_settings(
-  settings: BusinessSettings,
-): Promise<UpdateBusinessSettingsResult> {
-  if (
-    !settings ||
-    typeof settings.businessName !== "string" ||
-    settings.businessName.length > 120 ||
-    typeof settings.businessCategory !== "string" ||
-    settings.businessCategory.length > 80 ||
-    typeof settings.googleReviewLink !== "string" ||
-    settings.googleReviewLink.length > 2048
-  ) {
-    return { ok: false, message: "One or more business details are invalid or too long." };
-  }
-
-  const googleReviewLink = settings.googleReviewLink.trim();
-  if (googleReviewLink) {
-    try {
-      const url = new URL(googleReviewLink);
-      const hostname = url.hostname.toLowerCase();
-      const allowedHost =
-        hostname === "google.com" ||
-        hostname.endsWith(".google.com") ||
-        hostname === "g.page" ||
-        hostname === "maps.app.goo.gl";
-      if (url.protocol !== "https:" || !allowedHost) {
-        return { ok: false, message: "Enter a valid HTTPS Google review URL." };
-      }
-    } catch {
-      return { ok: false, message: "Enter a valid HTTPS Google review URL." };
+type SaveSettingsResult =
+  | {
+      ok: true;
+      message: string;
+      businessCategory: string;
+      googleReviewLink: string;
     }
-  }
-
-  let supabase: Awaited<ReturnType<typeof createClient>>;
-  try {
-    supabase = await createClient();
-  } catch (error) {
-    console.error("Unable to configure Supabase to update business settings.", error);
-    return { ok: false, message: "Settings are unavailable right now. Please try again." };
-  }
-
-  const { data, error: claimsError } = await supabase.auth.getClaims();
-  if (claimsError) {
-    console.error("Unable to verify user for business settings.", claimsError);
-    return { ok: false, message: "We couldn't verify your account. Please sign in again." };
-  }
-  if (typeof data?.claims.sub !== "string") {
-    return { ok: false, message: "Please sign in again before saving settings." };
-  }
-
-  const { error } = await supabase.from("settings").upsert({
-    user_id: data.claims.sub,
-    business_name: settings.businessName.trim() || null,
-    business_category: settings.businessCategory.trim() || null,
-    google_review_link: googleReviewLink || null,
-  });
-  if (error) {
-    console.error("Unable to update business settings.", error);
-    return { ok: false, message: "We couldn't save your business profile. Please try again." };
-  }
-
-  revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/overview");
-  revalidatePath("/r/[id]", "page");
-  return { ok: true, message: "Business profile saved." };
-}
+  | { ok: false; message: string };
 
 const fieldLimits = {
   businessName: 120,
@@ -148,40 +74,62 @@ export async function saveReviewSettings(
     supabase = await createClient();
   } catch (error) {
     console.error("Unable to configure Supabase to save review settings.", error);
-    return { ok: false, message: "Settings are unavailable right now. Please try again." };
+    throw new Error("Settings are unavailable right now. Please try again.");
   }
 
   const { data, error: claimsError } = await supabase.auth.getClaims();
   if (claimsError) {
     console.error("Unable to verify user for review settings.", claimsError);
-    return { ok: false, message: "We couldn't verify your account. Please sign in again." };
+    throw new Error("We couldn't verify your account. Please sign in again.");
   }
   if (typeof data?.claims.sub !== "string") {
-    return { ok: false, message: "Please sign in again before saving settings." };
+    throw new Error("Please sign in again before saving settings.");
   }
 
   const userId = data.claims.sub;
+  const businessCategory = settings.businessCategory.trim();
   const settingsUpdate = {
     business_name: settings.businessName.trim() || null,
-    business_category: settings.businessCategory.trim() || null,
+    business_category: businessCategory || null,
     google_review_link: googleReviewLink || null,
     private_feedback_url: privateFeedbackUrl || null,
     email_subject: settings.emailSubject,
     email_body: settings.emailBody,
   };
-  const { error } = await supabase
+  const { data: savedSettings, error } = await supabase
     .from("settings")
-    .upsert({ ...settingsUpdate, user_id: userId });
+    .upsert({ ...settingsUpdate, user_id: userId }, { onConflict: "user_id" })
+    .select("user_id, business_category, google_review_link")
+    .single();
 
   if (error) {
     console.error("Unable to save review settings.", error);
-    return { ok: false, message: "We couldn't save your settings right now. Please try again." };
+    return {
+      ok: false,
+      message: `Settings save failed (${error.code}): ${error.message}`,
+    };
+  }
+
+  if (
+    !savedSettings ||
+    savedSettings.user_id !== userId ||
+    savedSettings.business_category !== (businessCategory || null) ||
+    savedSettings.google_review_link !== (googleReviewLink || null)
+  ) {
+    console.error("Supabase returned unexpected settings after saving.", savedSettings);
+    return {
+      ok: false,
+      message: "Supabase did not return the saved business type and Google review link.",
+    };
   }
 
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/overview");
   revalidatePath("/r/[id]", "page");
   return {
     ok: true,
-    message: "Email settings saved. New review links will use these values.",
+    message: "Settings saved successfully.",
+    businessCategory: savedSettings.business_category ?? "",
+    googleReviewLink: savedSettings.google_review_link ?? "",
   };
 }

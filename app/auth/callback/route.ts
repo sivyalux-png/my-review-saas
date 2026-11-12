@@ -14,10 +14,13 @@ export async function GET(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         for (const { name, value, options } of cookiesToSet) {
           request.cookies.set(name, value);
           response.cookies.set(name, value, options);
+        }
+        for (const [name, value] of Object.entries(headers)) {
+          response.headers.set(name, value);
         }
       },
     },
