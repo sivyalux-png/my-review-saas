@@ -108,9 +108,9 @@ secret server-only. Configure the matching token, environment, and webhook
 destination separately for each deployment environment.
 
 Credit pack checkouts create an authenticated, single-use purchase intent. The
-signed Paddle webhook verifies the completed transaction and price before an
-atomic database function grants credits; duplicate webhook deliveries do not
-grant the same purchase twice.
+Paddle Node SDK verifies each webhook signature, and the handler validates the
+completed transaction and price before an atomic database function grants
+credits; duplicate webhook deliveries do not grant the same purchase twice.
 
 Signup accepts only a key already present in `licenses` with `status = 'available'`
 and a non-expired expiry date. Keys are normalized to uppercase, then checked
