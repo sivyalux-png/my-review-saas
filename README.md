@@ -100,12 +100,14 @@ to enable Paddle email-credit purchase fulfillment.
 ## Paddle email credit checkout
 
 Set `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` to the client-side token from Paddle and
-`NEXT_PUBLIC_PADDLE_ENVIRONMENT` to `sandbox` (or `production` after configuring
-the corresponding Paddle catalog). Set `PADDLE_WEBHOOK_SECRET` to the secret
-for a Paddle notification destination pointing to
-`/api/webhooks/paddle`, subscribed to `transaction.completed`. Keep the webhook
+`NEXT_PUBLIC_PADDLE_ENVIRONMENT` to `sandbox` or `production`. The environment
+selects the matching credit-pack price IDs. Set `PADDLE_WEBHOOK_SECRET` to the
+secret for a Paddle notification destination pointing to
+`/api/webhook/paddle`, subscribed to `transaction.completed`. Keep the webhook
 secret server-only. Configure the matching token, environment, and webhook
-destination separately for each deployment environment.
+destination separately for each deployment environment. Apply
+[`supabase/migrations/18_add_paddle_live_credit_prices.sql`](./supabase/migrations/18_add_paddle_live_credit_prices.sql)
+before enabling the production catalog.
 
 Credit pack checkouts create an authenticated, single-use purchase intent. The
 Paddle Node SDK verifies each webhook signature, and the handler validates the
