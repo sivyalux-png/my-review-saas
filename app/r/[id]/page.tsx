@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "../../../lib/supabase/server";
 import PublicReviewPage, { type PublicReviewRequest } from "./public-review-page";
 
@@ -10,6 +10,22 @@ export const metadata: Metadata = {
 
 const requestIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function safeGoogleReviewUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    const allowed =
+      hostname === "google.com" ||
+      hostname.endsWith(".google.com") ||
+      hostname === "g.page" ||
+      hostname === "maps.app.goo.gl";
+    return url.protocol === "https:" && allowed ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export default async function ReviewPage({
   params,
@@ -45,9 +61,42 @@ export default async function ReviewPage({
     typeof result.status !== "string" ||
     (result.logo_url !== null && typeof result.logo_url !== "string") ||
     (result.google_review_url !== null && typeof result.google_review_url !== "string") ||
-    (result.rating !== null && typeof result.rating !== "number")
+    (result.rating !== null && typeof result.rating !== "number") ||
+    typeof result.smart_review_gating !== "boolean" ||
+    typeof result.show_branding !== "boolean"
   ) {
     notFound();
+  }
+
+  let submissionError = "";
+  const shouldRouteToGoogle =
+    initialRating !== null &&
+    (initialRating >= 4 || !result.smart_review_gating);
+  if (shouldRouteToGoogle) {
+    if (result.status === "completed" && result.rating === initialRating) {
+      const savedUrl = safeGoogleReviewUrl(result.google_review_url);
+      if (savedUrl) redirect(savedUrl);
+    } else if (result.status === "queued" || result.status === "sent") {
+      const { data: submitted, error: submitError } = await supabase.rpc(
+        "submit_public_review_response",
+        {
+          p_request_id: id,
+          p_rating: initialRating,
+          p_customer_name: result.customer_name,
+          p_customer_email: null,
+          p_feedback: null,
+        },
+      );
+      if (submitError) {
+        console.error("Unable to record the review rating before redirect.", submitError);
+        submissionError = "We couldn't save your rating. Please try again.";
+      } else {
+        const submission = Array.isArray(submitted) ? submitted[0] : null;
+        const savedUrl = safeGoogleReviewUrl(submission?.google_review_url);
+        if (savedUrl) redirect(savedUrl);
+        redirect(`/r/${id}?submitted=1&rating=${initialRating}`);
+      }
+    }
   }
 
   const request: PublicReviewRequest = {
@@ -58,11 +107,13 @@ export default async function ReviewPage({
     googleReviewUrl: result.google_review_url,
     status: result.status,
     rating: result.rating,
+    smartReviewGating: result.smart_review_gating,
+    showBranding: result.show_branding,
   };
 
   return (
     <PublicReviewPage
-      initialError={errorValue === "1" ? "We couldn't save your rating. Please try again." : ""}
+      initialError={submissionError || (errorValue === "1" ? "We couldn't save your rating. Please try again." : "")}
       initialRating={initialRating}
       initialSubmitted={submittedValue === "1"}
       request={request}

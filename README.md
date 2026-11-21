@@ -36,22 +36,34 @@ request proxy refreshes Supabase cookies and redirects signed-out visitors to
    `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`).
    These are server-only variables: never use the `NEXT_PUBLIC_` prefix for
    them or expose their values to the browser.
-6. In Resend, verify a sending domain and set the server-only
+6. Generate a base64-encoded 32-byte key for
+   `EMAIL_CREDENTIALS_ENCRYPTION_KEY` with
+   `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`.
+   A 64-character hexadecimal key is also accepted. Put the value in `.env.local`
+   for local development and restart the dev server. Set the same stable secret
+   in production's environment variables and redeploy. Do not change or lose
+   this key after users have saved credentials, or those credentials cannot be
+   decrypted. The Settings page validates this key before allowing Resend
+   credentials to be saved and displays setup instructions if it is missing or
+   invalid.
+   Set a separate random value of at least 32 bytes for `CRON_SECRET`; these
+   protect stored BYOS credentials and scheduled follow-up delivery.
+7. In Resend, verify a sending domain and set the server-only
    `RESEND_API_KEY` and `RESEND_FROM_EMAIL` variables. Set
    `RESEND_FROM_EMAIL` to an address on that verified domain (for example,
    `reviews@your-verified-domain.com`). Review request emails use the
    workspace's business name as the sender display name.
-7. Add all seven variables in Vercel under **Project Settings → Environment
+8. Add these variables in Vercel under **Project Settings → Environment
    Variables**, using the correct site URL for each environment, then restart
    the local development server or redeploy.
 
 Only use the Supabase publishable key in these `NEXT_PUBLIC_` variables. Never
 put a Supabase secret or service-role key in browser-visible configuration.
-Email signup creates a Supabase Auth user, and the database trigger creates
-their profile. If email confirmation is enabled, the confirmation callback
-activates the license before redirecting to the dashboard.
-With email confirmation enabled, open the confirmation link in the same
-browser within 24 hours so the pending license can be activated.
+Email signup creates a Supabase Auth user, profile, and default business
+location. New accounts start with 30 system email credits. AppSumo license
+codes are optional at signup and can be redeemed later from Plan & credits.
+If email confirmation is enabled, open the confirmation link in the same
+browser to finish signup and, when provided, activate the pending license.
 
 ## Supabase database schema
 
@@ -89,13 +101,19 @@ business profile settings and private feedback status, then apply
 to migrate customer contacts to email addresses, add email-delivery status,
 remove phone/SMS/WhatsApp fields, and update request creation and delivery
 credit accounting. Review requests now require a customer name and email.
-Credits are reserved immediately before Resend dispatch; failed dispatches
+Credits are reserved immediately before email dispatch; failed dispatches
 refund the credit, and successful dispatches consume one credit. The first
 migration creates `profiles`, `licenses`, and `settings`, enables row-level
 security, and automatically creates profiles for new Supabase Auth users.
 Apply
 [`supabase/migrations/17_paddle_email_credit_purchases.sql`](./supabase/migrations/17_paddle_email_credit_purchases.sql)
 to enable Paddle email-credit purchase fulfillment.
+Apply
+[`supabase/migrations/19_appsumo_byos_locations.sql`](./supabase/migrations/19_appsumo_byos_locations.sql)
+after the previous migrations to add per-location settings, private feedback,
+BYOS credential storage, system email credits, AppSumo location enforcement,
+review-link click tracking, and scheduled follow-up state. Run the entire SQL
+file in Supabase SQL Editor before deploying the matching application code.
 
 ## Paddle email credit checkout
 
@@ -114,8 +132,9 @@ Paddle Node SDK verifies each webhook signature, and the handler validates the
 completed transaction and price before an atomic database function grants
 credits; duplicate webhook deliveries do not grant the same purchase twice.
 
-Signup accepts only a key already present in `licenses` with `status = 'available'`
-and a non-expired expiry date. Keys are normalized to uppercase, then checked
+When a license code is provided at signup or redemption, it must already be
+present in `licenses` with `status = 'available'` and a non-expired expiry
+date. Keys are normalized to uppercase, then checked
 against both HMAC-SHA-256 hashes (used for newly generated keys) and plain
 SHA-256 hashes (for compatible existing imports); plaintext keys are never
 stored. To create a disposable test key, run `npm run license:create-test`;
@@ -129,9 +148,22 @@ it through the authenticated RPC; `key_last4` is display metadata and is never
 used to verify a key. Credit balances are initialized and upgraded with the
 license entitlement. Credit grants do not reset monthly.
 
-The dashboard overview reads the signed-in user's plan and credit balance from
-their profile. Review requests are stored per user in `review_requests`;
-customer responses are recorded on those request rows.
+The dashboard creates one default business location per account; Tier 1 is
+limited to one location, Tier 2 to five, and Tier 3 is unlimited. Switch the
+active location from the dashboard header. Review requests are scoped to that
+location. Email links and printable poster QR codes open the Smart Review
+Gating page; low ratings are saved to `private_feedback` and higher ratings
+continue to the saved Google review URL. BYOS Resend API keys and SMTP passwords are AES-256-GCM encrypted
+before being stored in `email_provider_credentials`; that table has no
+authenticated-client policies. Configure the encryption key before users
+connect a provider.
+
+The Vercel cron in `vercel.json` calls `/api/cron/review-followups` daily.
+Vercel must have `CRON_SECRET` configured. Tier 2 can send one reminder after
+three days; Tier 3 can send reminders on day 3 and day 7. A review page visit
+marks the link as opened and suppresses future reminders. System delivery
+uses the default Resend credentials and consumes the account's free/legacy
+email credits; a connected sender is not charged TableSignal credits.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

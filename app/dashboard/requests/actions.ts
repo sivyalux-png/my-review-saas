@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "../../../lib/supabase/server";
+import { getActiveBusiness } from "../../../lib/businesses";
 import { isValidEmail } from "../../../lib/review-requests";
 
 const maximumNameLength = 120;
@@ -41,12 +42,14 @@ export async function createReviewRequest(
   if (!authentication.ok) {
     return authentication;
   }
+  const business = await getActiveBusiness(authentication.supabase, authentication.userId);
 
   let data: unknown;
   try {
     const result = await authentication.supabase.rpc("create_review_request", {
       p_customer_name: normalizedName,
       p_customer_email: normalizedEmail,
+      p_business_id: business.id,
     });
 
     if (result.error) {
@@ -90,7 +93,7 @@ export async function createReviewRequest(
 }
 
 type AuthenticatedSupabaseResult =
-  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>> }
+  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>>; userId: string }
   | { ok: false; message: string };
 
 async function getAuthenticatedSupabase(): Promise<AuthenticatedSupabaseResult> {
@@ -114,7 +117,7 @@ async function getAuthenticatedSupabase(): Promise<AuthenticatedSupabaseResult> 
     return { ok: false, message: "Please sign in again before creating a request." };
   }
 
-  return { ok: true, supabase };
+  return { ok: true, supabase, userId: data.claims.sub };
 }
 
 function handleRequestError(
@@ -181,9 +184,11 @@ export async function importReviewRequests(
   if (!authentication.ok) {
     return authentication;
   }
+  const business = await getActiveBusiness(authentication.supabase, authentication.userId);
 
   const { data, error } = await authentication.supabase.rpc("create_review_requests", {
     p_requests: normalizedRows,
+    p_business_id: business.id,
   });
   if (error) {
     return handleRequestError(error, "Unable to import review requests.");

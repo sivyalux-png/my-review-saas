@@ -1,82 +1,11 @@
 "use server";
 
-import { getEmailCreditPack, type EmailCreditPriceId } from "../../../lib/email-credit-packs";
-import { createAdminClient } from "../../../lib/supabase/admin";
 import { getLicenseKeyHashes, normalizeLicenseKey } from "../../../lib/supabase/licenses";
 import { createClient } from "../../../lib/supabase/server";
 
 const licenseKeyPattern = /^[A-Z0-9][A-Z0-9-]{9,63}$/;
 const invalidLicenseMessage =
   "License key is invalid, expired, or already redeemed.";
-
-export async function createEmailCreditPackPurchase(priceId: string) {
-  const pack = getEmailCreditPack(priceId);
-  if (!pack) {
-    return {
-      ok: false as const,
-      message: "That email credit package is not available.",
-    };
-  }
-
-  let supabase: Awaited<ReturnType<typeof createClient>>;
-  try {
-    supabase = await createClient();
-  } catch (error) {
-    console.error("Unable to configure the authenticated checkout client.", error);
-    return {
-      ok: false as const,
-      message: "Checkout is unavailable. Please try again later.",
-    };
-  }
-
-  const { data: claimsData, error: userError } = await supabase.auth.getClaims();
-  if (userError) {
-    console.error("Unable to verify user for checkout.", userError);
-    return {
-      ok: false as const,
-      message: "We couldn't verify your account. Please sign in again.",
-    };
-  }
-
-  const userId = claimsData?.claims.sub;
-  if (typeof userId !== "string") {
-    return {
-      ok: false as const,
-      message: "Please sign in again before starting checkout.",
-    };
-  }
-
-  let admin: ReturnType<typeof createAdminClient>;
-  try {
-    admin = createAdminClient();
-  } catch (error) {
-    console.error("Unable to configure the email credit purchase client.", error);
-    return {
-      ok: false as const,
-      message: "Checkout is unavailable. Please try again later.",
-    };
-  }
-
-  const { data: purchase, error: purchaseError } = await admin
-    .from("email_credit_purchases")
-    .insert({
-      user_id: userId,
-      price_id: priceId as EmailCreditPriceId,
-      credits: pack.credits,
-    })
-    .select("id")
-    .single();
-
-  if (purchaseError) {
-    console.error("Unable to create an email credit purchase intent.", purchaseError);
-    return {
-      ok: false as const,
-      message: "We couldn't start checkout. Please try again.",
-    };
-  }
-
-  return { ok: true as const, purchaseId: purchase.id };
-}
 
 export async function redeemLicenseKey(licenseKey: string) {
   const normalizedKey = normalizeLicenseKey(licenseKey);
@@ -169,7 +98,7 @@ export async function redeemLicenseKey(licenseKey: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan_tier, monthly_credit_limit, credits_remaining")
+    .select("plan_tier")
     .eq("id", userId)
     .maybeSingle();
 
@@ -186,11 +115,7 @@ export async function redeemLicenseKey(licenseKey: string) {
     };
   }
 
-  if (
-    profile.plan_tier === null ||
-    profile.monthly_credit_limit === null ||
-    profile.credits_remaining === null
-  ) {
+  if (profile.plan_tier === null) {
     console.error("License redeemed but the profile has incomplete entitlement data.");
     return {
       ok: false as const,
@@ -204,8 +129,6 @@ export async function redeemLicenseKey(licenseKey: string) {
     message: `License redeemed. Your ${profile.plan_tier} plan is now active.`,
     entitlement: {
       planTier: profile.plan_tier,
-      monthlyCreditLimit: profile.monthly_credit_limit,
-      creditsRemaining: profile.credits_remaining,
     },
   };
 }

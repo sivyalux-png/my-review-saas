@@ -7,6 +7,7 @@ import { sendReviewEmail } from "./requests/send-review";
 
 type CreateReviewRequestProps = {
   creditsRemaining: number;
+  providerConnected: boolean;
   onCreditsChanged: (creditsRemaining: number) => void;
 };
 
@@ -20,6 +21,7 @@ const inputClass =
   "mt-2 h-11 w-full rounded-[5px] border border-white/[0.12] bg-[#10110f] px-3.5 text-[12px] text-[#f3f2e9] outline-none transition-colors placeholder:text-[#6e6f65] focus:border-[#c7f36b]/70 focus:ring-2 focus:ring-[#c7f36b]/10";
 export default function CreateReviewRequest({
   creditsRemaining,
+  providerConnected,
   onCreditsChanged,
 }: CreateReviewRequestProps) {
   const router = useRouter();
@@ -111,7 +113,7 @@ export default function CreateReviewRequest({
             <div>
               <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-[#c7f36b]">Customer outreach</p>
               <h2 className="mt-2 text-[20px] font-medium tracking-[-0.035em]" id="create-request-heading">Create a review request</h2>
-              <p className="mt-2 text-[11px] leading-5 text-[#929188]" id="create-request-description">Send a review invitation by email. 1 credit is used only when the email is dispatched.</p>
+              <p className="mt-2 text-[11px] leading-5 text-[#929188]" id="create-request-description">Send a review invitation by email. {providerConnected ? "Your connected provider's sending limits apply." : "One email credit is used when the email is dispatched."}</p>
             </div>
             <button
               aria-label="Close dialog"
@@ -156,10 +158,10 @@ export default function CreateReviewRequest({
 
             <div className="flex items-center justify-between gap-3 rounded-[5px] border border-white/[0.08] bg-[#10110f] px-3.5 py-3">
               <span className="text-[10px] text-[#929188]">Available credits</span>
-              <span className="text-[11px] font-medium text-[#c7f36b]">{creditsRemaining.toLocaleString()}</span>
+              <span className="text-[11px] font-medium text-[#c7f36b]">{providerConnected ? "Unlimited (BYOS)" : creditsRemaining.toLocaleString()}</span>
             </div>
 
-            {creditsRemaining < 1 && (
+            {!providerConnected && creditsRemaining < 1 && (
               <p className="rounded-[5px] border border-[#edbd65]/20 bg-[#edbd65]/[0.06] px-3.5 py-3 text-[10px] leading-5 text-[#edbd65]">
                 You have no credits available. Activate or top up a plan before sending an email request.
               </p>
@@ -182,7 +184,7 @@ export default function CreateReviewRequest({
               </button>
               <button
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-[5px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isSubmitting || creditsRemaining < 1}
+                disabled={isSubmitting || (!providerConnected && creditsRemaining < 1)}
                 type="submit"
               >
                 {isSubmitting ? "Sending email…" : "Send review email"}

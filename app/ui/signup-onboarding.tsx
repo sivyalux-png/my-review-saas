@@ -70,7 +70,7 @@ export default function SignupOnboarding({
           />
         </div>
         <div>
-          <label className={labelClassName} htmlFor="signup-license-code">AppSumo License Code</label>
+          <label className={labelClassName} htmlFor="signup-license-code">AppSumo License Code <span className="text-zinc-500">(optional)</span></label>
           <input
             autoCapitalize="characters"
             autoComplete="off"
@@ -79,7 +79,6 @@ export default function SignupOnboarding({
             maxLength={64}
             name="licenseCode"
             placeholder="e.g. TABLE-LTD-9872"
-            required
           />
         </div>
         <button
@@ -87,7 +86,7 @@ export default function SignupOnboarding({
           disabled={isPending}
           type="submit"
         >
-          {isPending ? "Creating your account..." : "Create Account & Activate Lifetime Access"}
+          {isPending ? "Creating your account..." : "Create your account"}
           {!isPending && <span aria-hidden="true">↗</span>}
         </button>
       </form>
@@ -101,7 +100,7 @@ export default function SignupOnboarding({
       </p>
 
       <p className="mt-5 rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-[10px] leading-5 text-amber-100/80" role="note">
-        Use an AppSumo key that has been added to this project’s licenses table. Google sign-in is not connected yet.
+        New accounts receive 30 free system emails. If you have an AppSumo code, it must already be added to the licenses table.
       </p>
     </>
   );

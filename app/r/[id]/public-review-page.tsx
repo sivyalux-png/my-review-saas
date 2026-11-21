@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { submitBusinessPublicReview } from "../../b/[id]/actions";
 import { submitPublicReview } from "./actions";
 
 export type PublicReviewRequest = {
@@ -12,6 +13,8 @@ export type PublicReviewRequest = {
   googleReviewUrl: string | null;
   status: string;
   rating: number | null;
+  smartReviewGating: boolean;
+  showBranding: boolean;
 };
 
 function safeLogoUrl(value: string | null) {
@@ -45,11 +48,13 @@ export default function PublicReviewPage({
   initialRating,
   initialSubmitted,
   initialError,
+  submissionMode = "request",
 }: {
   request: PublicReviewRequest;
   initialRating: number | null;
   initialSubmitted: boolean;
   initialError: string;
+  submissionMode?: "request" | "business";
 }) {
   const alreadyCompleted =
     request.status === "completed" || request.status === "private_feedback_submitted";
@@ -60,16 +65,38 @@ export default function PublicReviewPage({
   const [isSubmitted, setIsSubmitted] = useState(alreadyCompleted || initialSubmitted);
   const [googleReviewUrl, setGoogleReviewUrl] = useState(safeGoogleReviewUrl(request.googleReviewUrl));
   const logoUrl = safeLogoUrl(request.logoUrl);
-  const hasLowRating = rating !== null && rating <= 3;
-  const isHighRating = rating !== null && rating >= 4;
+  const [customerName, setCustomerName] = useState(
+    submissionMode === "business" ? "" : request.customerName,
+  );
+  const [customerEmail, setCustomerEmail] = useState("");
+  const hasLowRating = request.smartReviewGating && rating !== null && rating <= 3;
+  const isHighRating = rating !== null && (rating >= 4 || !request.smartReviewGating);
 
   async function saveRating(selectedRating: number, comments: string) {
     setIsSubmitting(true);
     setErrorMessage("");
     try {
-      const result = await submitPublicReview(request.id, selectedRating, comments);
+      const result = submissionMode === "business"
+        ? await submitBusinessPublicReview(
+            request.id,
+            selectedRating,
+            customerName,
+            customerEmail,
+            comments,
+          )
+        : await submitPublicReview(
+            request.id,
+            selectedRating,
+            customerName,
+            customerEmail,
+            comments,
+          );
       if (!result.ok) {
         setErrorMessage(result.message);
+        return;
+      }
+      if (result.googleReviewUrl && (selectedRating >= 4 || !result.smartReviewGating)) {
+        window.location.assign(result.googleReviewUrl);
         return;
       }
       setGoogleReviewUrl(result.googleReviewUrl);
@@ -84,7 +111,7 @@ export default function PublicReviewPage({
 
   function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (rating === null || rating > 3) return;
+    if (!hasLowRating || rating === null) return;
     void saveRating(rating, feedback);
   }
 
@@ -93,10 +120,12 @@ export default function PublicReviewPage({
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[460px] bg-[radial-gradient(ellipse_at_top,rgba(199,243,107,0.09),transparent_66%)]" />
 
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between py-6">
-        <Link aria-label="TableSignal home" className="flex items-center gap-2.5" href="/">
-          <span aria-hidden="true" className="brand-mark"><span /><span /><span /></span>
-          <span className="text-[16px] font-semibold tracking-[-0.04em]">table<span className="text-[#c7f36b]">signal</span></span>
-        </Link>
+        {request.showBranding && (
+          <Link aria-label="TableSignal home" className="flex items-center gap-2.5" href="/">
+            <span aria-hidden="true" className="brand-mark"><span /><span /><span /></span>
+            <span className="text-[16px] font-semibold tracking-[-0.04em]">table<span className="text-[#c7f36b]">signal</span></span>
+          </Link>
+        )}
         <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.03] px-3 py-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[#aaa99f]">
           Private customer feedback
         </span>
@@ -114,7 +143,11 @@ export default function PublicReviewPage({
           )}
           <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#c7f36b]">How was your experience?</p>
           <h1 className="mt-3 break-words text-[26px] font-medium leading-tight tracking-[-0.045em] sm:text-[32px]">{request.businessName}</h1>
-          <p className="mt-2 text-[12px] text-[#929188]">Hi {request.customerName}, we&apos;d love to hear what you think.</p>
+          <p className="mt-2 text-[12px] text-[#929188]">
+            {submissionMode === "business"
+              ? "We’d love to hear what you think."
+              : `Hi ${request.customerName}, we’d love to hear what you think.`}
+          </p>
         </div>
 
         <div className="overflow-hidden rounded-[9px] border border-white/[0.1] bg-[#171814]/95 shadow-[0_24px_90px_rgba(0,0,0,0.38)]">
@@ -156,7 +189,7 @@ export default function PublicReviewPage({
                     onClick={() => {
                       setRating(star);
                       setErrorMessage("");
-                      if (star >= 4) void saveRating(star, "");
+                      if (star >= 4 || !request.smartReviewGating) void saveRating(star, "");
                     }}
                     type="button"
                   >
@@ -168,7 +201,7 @@ export default function PublicReviewPage({
                 {isSubmitting
                   ? "Saving your rating…"
                   : isHighRating
-                    ? "Thanks! We’re saving your rating…"
+                    ? "Thanks! Taking you to Google…"
                     : hasLowRating
                       ? "We’re sorry your experience wasn’t great. Tell us how we can improve."
                       : "Tap a star to rate your experience."}
@@ -176,6 +209,31 @@ export default function PublicReviewPage({
 
               {hasLowRating && (
                 <form className="mt-5 space-y-4 border-t border-white/[0.08] pt-5" onSubmit={submitFeedback}>
+                  <label className="block text-[11px] font-medium text-[#deddd3]" htmlFor="private-customer-name">
+                    Your name
+                    <input
+                      autoComplete="name"
+                      className="mt-2 h-11 w-full rounded-[6px] border border-white/[0.12] bg-[#10110f] px-3.5 text-[12px] text-[#f3f2e9] outline-none focus:border-[#c7f36b]/70"
+                      id="private-customer-name"
+                      maxLength={120}
+                      onChange={(event) => setCustomerName(event.target.value)}
+                      required
+                      value={customerName}
+                    />
+                  </label>
+                  <label className="block text-[11px] font-medium text-[#deddd3]" htmlFor="private-customer-email">
+                    Your email
+                    <input
+                      autoComplete="email"
+                      className="mt-2 h-11 w-full rounded-[6px] border border-white/[0.12] bg-[#10110f] px-3.5 text-[12px] text-[#f3f2e9] outline-none focus:border-[#c7f36b]/70"
+                      id="private-customer-email"
+                      maxLength={254}
+                      onChange={(event) => setCustomerEmail(event.target.value)}
+                      required
+                      type="email"
+                      value={customerEmail}
+                    />
+                  </label>
                   <label className="block text-[11px] font-medium text-[#deddd3]" htmlFor="private-review-feedback">
                     What could we have done better?
                     <textarea

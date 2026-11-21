@@ -11,6 +11,7 @@ type OverviewClientProps = {
   planTier: string | null;
   monthlyCreditLimit: number | null;
   creditsRemaining: number | null;
+  providerConnected: boolean;
   googleReviewLink: string | null;
   analytics: {
     totalSent: number;
@@ -31,6 +32,7 @@ export default function OverviewClient({
   planTier,
   monthlyCreditLimit: savedMonthlyCreditLimit,
   creditsRemaining: savedCreditsRemaining,
+  providerConnected,
   googleReviewLink,
   analytics,
 }: OverviewClientProps) {
@@ -118,6 +120,7 @@ export default function OverviewClient({
               </div>
               <CreateReviewRequest
                 creditsRemaining={creditsRemaining}
+                providerConnected={providerConnected}
                 onCreditsChanged={setCreditsRemaining}
               />
             </section>

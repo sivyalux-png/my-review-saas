@@ -24,6 +24,7 @@ type RequestsPageProps = {
   initialCreditsRemaining: number;
   monthlyCreditLimit: number;
   initialRequests: CustomerRequest[];
+  providerConnected: boolean;
 };
 
 const maximumFileSize = 10 * 1024 * 1024;
@@ -95,6 +96,7 @@ export default function RequestsClient({
   initialCreditsRemaining,
   monthlyCreditLimit,
   initialRequests,
+  providerConnected,
 }: RequestsPageProps) {
   const router = useRouter();
   const [creditsRemaining, setCreditsRemaining] = useState(initialCreditsRemaining);
@@ -121,7 +123,7 @@ export default function RequestsClient({
 
   async function submitSingleRequest(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (remainingRequests < 1) {
+    if (!providerConnected && remainingRequests < 1) {
       setFormMessage("You have reached this month's request limit.");
       return;
     }
@@ -143,7 +145,7 @@ export default function RequestsClient({
         status: emailResult.ok ? "sent" : "failed",
       }]);
       setFormMessage(emailResult.ok
-        ? `Review email sent to ${customerEmail.trim()}. 1 credit used.`
+        ? `Review email sent to ${customerEmail.trim()}.${providerConnected ? " Sent through your connected provider." : " 1 email credit used."}`
         : `The request was saved, but its email was not sent: ${emailResult.message}`);
       setName("");
       setCustomerEmail("");
@@ -155,7 +157,7 @@ export default function RequestsClient({
   }
 
   async function retryEmail(request: CustomerRequest) {
-    if (creditsRemaining < 1) {
+    if (!providerConnected && creditsRemaining < 1) {
       setFormMessage("You have no credits available. Activate or top up a plan to continue.");
       return;
     }
@@ -175,7 +177,7 @@ export default function RequestsClient({
           item.id === request.id ? { ...item, status: "sent" } : item,
         ),
       );
-      setFormMessage(`Review email sent to ${request.email}. 1 credit used.`);
+      setFormMessage(`Review email sent to ${request.email}.${providerConnected ? " Sent through your connected provider." : " 1 email credit used."}`);
       router.refresh();
     } catch (error) {
       console.error("Unable to retry a review email.", error);
@@ -206,7 +208,7 @@ export default function RequestsClient({
       setUploadIsError(true);
       return;
     }
-    if (remainingRequests < 1) {
+    if (!providerConnected && remainingRequests < 1) {
       setUploadMessage("You have no credits available. Activate or top up a plan to continue.");
       setUploadIsError(true);
       return;
@@ -228,7 +230,7 @@ export default function RequestsClient({
       }
 
       const { requests: importedRequests, skipped } = rowsToRequests(rows);
-      if (importedRequests.length > remainingRequests) {
+      if (!providerConnected && importedRequests.length > remainingRequests) {
         throw new Error(`This file has ${importedRequests.length} valid customers, but only ${remainingRequests} credits remain.`);
       }
 
@@ -241,10 +243,14 @@ export default function RequestsClient({
       const deliveryStatuses: EmailDeliveryStatus[] = Array(importedRequests.length).fill("queued");
       let dispatchedCount = 0;
       let failedCount = 0;
+      let updatedCredits = creditsRemaining;
       for (let index = 0; index < importedRequestIds.length; index += 1) {
         const emailResult = await sendReviewEmail(importedRequestIds[index]);
         deliveryStatuses[index] = emailResult.ok ? "sent" : "failed";
-        if (emailResult.ok) dispatchedCount += 1;
+        if (emailResult.ok) {
+          dispatchedCount += 1;
+          updatedCredits = emailResult.creditsRemaining;
+        }
         else failedCount += 1;
 
         if (index < importedRequestIds.length - 1) {
@@ -252,7 +258,7 @@ export default function RequestsClient({
         }
       }
 
-      setCreditsRemaining((current) => Math.max(current - dispatchedCount, 0));
+      setCreditsRemaining(providerConnected ? updatedCredits : Math.max(creditsRemaining - dispatchedCount, 0));
       addRequests(importedRequests.map((request, index) => ({
         id: importedRequestIds[index],
         name: request.name,
@@ -297,12 +303,12 @@ export default function RequestsClient({
                   <span><i aria-hidden="true" /> Used</span>
                 </div>
               </div>
-              <p className="requests-usage-label">Monthly request usage</p>
+              <p className="requests-usage-label">{providerConnected ? "Sending with your connected email provider" : "Email credits available"}</p>
               <div aria-label={`${Math.round(usagePercent)} percent of initial email credits used`} className="requests-progress-track" role="progressbar" aria-valuemax={monthlyCreditLimit} aria-valuemin={0} aria-valuenow={requestsSent}>
                 <div className="requests-progress-value transition-[width] duration-500" style={{ width: `${usagePercent}%` }} />
               </div>
               <div className="requests-usage-footer">
-                <p>Available Credits: <strong>{remainingRequests.toLocaleString()}</strong><span className="requests-expiry"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.2c0 4.3-2.9 7.5-7 9.3-4.1-1.8-7-5-7-9.3V6l7-2.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="m9 11.5 2 2 4-4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>Credits never expire</span></p>
+                <p>Available Credits: <strong>{providerConnected ? "Unlimited (BYOS)" : remainingRequests.toLocaleString()}</strong><span className="requests-expiry"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.2c0 4.3-2.9 7.5-7 9.3-4.1-1.8-7-5-7-9.3V6l7-2.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="m9 11.5 2 2 4-4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>{providerConnected ? "Your provider's sending limits apply" : "Free trial + lifetime credits"}</span></p>
                 <Link href="/dashboard/plan">Buy extra credits</Link>
               </div>
             </section>
@@ -324,7 +330,7 @@ export default function RequestsClient({
                     <input autoComplete="email" className="requests-input mt-1.5 h-10 w-full rounded-[4px] border border-white/[0.11] bg-[#10110f] px-3 text-[11px] text-[#eeede4] outline-none transition-colors placeholder:text-[#686960] focus:border-[#c7f36b]/60" maxLength={254} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="jamie@example.com" required type="email" value={customerEmail} />
                   </label>
                   <div className="requests-form-actions flex flex-wrap items-center gap-3 pt-1">
-                    <button className="requests-primary inline-flex h-10 items-center gap-2 rounded-[4px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-40" disabled={remainingRequests === 0} type="submit">Send review email <span aria-hidden="true">↗</span></button>
+                    <button className="requests-primary inline-flex h-10 items-center gap-2 rounded-[4px] bg-[#c7f36b] px-4 text-[10px] font-semibold text-[#171a11] transition-colors hover:bg-[#d8ff8e] disabled:cursor-not-allowed disabled:opacity-40" disabled={!providerConnected && remainingRequests === 0} type="submit">Send review email <span aria-hidden="true">↗</span></button>
                     <p aria-live="polite" className="text-[10px] text-[#c7f36b]" role="status">{formMessage}</p>
                   </div>
                 </form>
@@ -398,7 +404,7 @@ export default function RequestsClient({
                         {(request.status === "queued" || request.status === "failed") && (
                           <button
                             className="rounded border border-white/[0.12] px-2.5 py-1.5 text-[9px] font-medium text-[#c7f36b] transition-colors hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-50"
-                            disabled={creditsRemaining < 1 || retryingRequestIds.has(request.id)}
+                            disabled={(!providerConnected && creditsRemaining < 1) || retryingRequestIds.has(request.id)}
                             onClick={() => void retryEmail(request)}
                             type="button"
                           >

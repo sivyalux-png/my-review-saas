@@ -49,7 +49,7 @@ export default async function SignupPage({
         <section aria-labelledby="signup-heading" className="mx-auto w-full max-w-[440px] rounded-xl border border-zinc-800 bg-zinc-950/80 p-5 shadow-2xl shadow-black/20 sm:p-7">
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-300">GET STARTED</p>
           <h2 className="mt-3 text-[28px] font-semibold leading-tight tracking-[-0.05em]" id="signup-heading">Create your account</h2>
-          <p className="mt-2 mb-6 text-[12px] leading-6 text-zinc-400">Choose how you’d like to get started and activate your AppSumo lifetime deal.</p>
+          <p className="mt-2 mb-6 text-[12px] leading-6 text-zinc-400">Create your workspace and start with 30 free system emails. Redeem an AppSumo code now or later.</p>
           <SignupOnboarding initialError={initialError} />
           <p className="mt-5 text-center text-[11px] text-zinc-500">
             Already have an account?{" "}

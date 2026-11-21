@@ -1,12 +1,12 @@
 import { createAdminClient } from "../../../lib/supabase/admin";
 import { createClient } from "../../../lib/supabase/server";
+import { sendEmail } from "../../../lib/email-provider";
 import { verifyEmailAddress } from "../../../lib/emailVerifier";
 
 export const runtime = "nodejs";
 
 const requestIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ratingWidgetToken = /\{(?:Star_Rating_Widget|Star_Rating_Links|Google_Review_Link)\}/g;
 
 const defaultEmailSubject = "A quick favor, {Customer_Name}?";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
   const { data: reviewRequest, error: requestError } = await supabase
     .from("review_requests")
-    .select("id, customer_name, customer_email, status, email_status")
+    .select("id, business_id, customer_name, customer_email, status, email_status")
     .eq("id", payload.requestId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -81,29 +81,23 @@ export async function POST(request: Request) {
     return Response.json({ error: emailVerification.reason }, { status: 400 });
   }
 
-  const [settingsResult, profileResult] = await Promise.all([
-    supabase
-      .from("settings")
-      .select("business_name, email_subject, email_body")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("business_name")
-      .eq("id", userId)
-      .maybeSingle(),
-  ]);
-
-  if (settingsResult.error || profileResult.error) {
-    console.error("Unable to load review email settings.", settingsResult.error ?? profileResult.error);
+  const { data: business, error: businessError } = await supabase
+    .from("businesses")
+    .select("business_name, email_subject, email_body")
+    .eq("id", reviewRequest.business_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (businessError) {
+    console.error("Unable to load the business for review email.", businessError);
     return Response.json({ error: "We couldn't load your email settings." }, { status: 500 });
   }
+  if (!business) {
+    return Response.json({ error: "The business for this review request is unavailable." }, { status: 404 });
+  }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const configuredFrom = process.env.RESEND_FROM_EMAIL;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!apiKey || !configuredFrom || !siteUrl) {
-    console.error("Review email is not configured. Set RESEND_API_KEY, RESEND_FROM_EMAIL, and NEXT_PUBLIC_SITE_URL.");
+  if (!siteUrl) {
+    console.error("Review email is not configured. Set NEXT_PUBLIC_SITE_URL.");
     return Response.json({ error: "Email sending is not configured. Please contact support." }, { status: 503 });
   }
 
@@ -123,17 +117,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "Email sending is not configured correctly." }, { status: 503 });
   }
 
-  const businessName =
-    settingsResult.data?.business_name?.trim() ||
-    profileResult.data?.business_name?.trim() ||
-    "Your business";
-  const from = formatSender(businessName, configuredFrom);
-  if (!from) {
-    console.error("RESEND_FROM_EMAIL must be a valid address on a verified Resend sending domain.");
-    return Response.json({ error: "Email sending is not configured correctly." }, { status: 503 });
-  }
-  const subjectTemplate = settingsResult.data?.email_subject?.trim() || defaultEmailSubject;
-  const bodyTemplate = settingsResult.data?.email_body?.trim() || defaultEmailBody;
+  const businessName = business.business_name.trim() || "Your business";
+  const subjectTemplate = business.email_subject?.trim() || defaultEmailSubject;
+  const bodyTemplate = business.email_body?.trim() || defaultEmailBody;
   const subject = renderTemplate(subjectTemplate, reviewRequest.customer_name, businessName)
     .replace(/[\r\n]+/g, " ")
     .trim();
@@ -191,24 +177,17 @@ export async function POST(request: Request) {
     );
   }
 
-  let resendResponse: Response;
   try {
-    resendResponse = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [reviewRequest.customer_email],
-        subject,
-        text,
-        html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${html}</div>`,
-      }),
+    await sendEmail({
+      userId,
+      businessName,
+      to: reviewRequest.customer_email,
+      subject,
+      text,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${html}</div>`,
     });
   } catch (error) {
-    console.error("Resend request failed while sending a review email.", error);
+    console.error("Email provider failed while sending a review email.", error);
     const { error: refundError } = await admin.rpc("finalize_review_email_dispatch", {
       p_request_id: reviewRequest.id,
       p_sent: false,
@@ -221,22 +200,6 @@ export async function POST(request: Request) {
       );
     }
     return Response.json({ error: "We couldn't send the email. Please try again." }, { status: 502 });
-  }
-
-  if (!resendResponse.ok) {
-    console.error("Resend rejected a review email.", resendResponse.status);
-    const { error: refundError } = await admin.rpc("finalize_review_email_dispatch", {
-      p_request_id: reviewRequest.id,
-      p_sent: false,
-    });
-    if (refundError) {
-      console.error("Unable to refund credit after Resend rejected review email.", refundError);
-      return Response.json(
-        { error: "The email wasn't sent, and we couldn't confirm the credit refund. Please contact support." },
-        { status: 500 },
-      );
-    }
-    return Response.json({ error: "We couldn't send the email. Please check your email configuration." }, { status: 502 });
   }
 
   const { data: creditsRemaining, error: finalizeError } = await admin.rpc(
@@ -259,22 +222,6 @@ function renderTemplate(template: string, customerName: string, businessName: st
   return template
     .replaceAll("{Customer_Name}", customerName)
     .replaceAll("{Business_Name}", businessName);
-}
-
-function formatSender(businessName: string, configuredFrom: string) {
-  if (/[\r\n]/.test(configuredFrom)) {
-    return null;
-  }
-
-  const match = /^(?:[^<>]*<([^<>]+)>|([^<>]+))$/.exec(configuredFrom.trim());
-  const address = (match?.[1] ?? match?.[2] ?? "").trim();
-  if (!emailPattern.test(address)) {
-    return null;
-  }
-
-  const displayName = businessName.replace(/[\r\n]+/g, " ").trim() || "Your business";
-  const escapedName = displayName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `"${escapedName}" <${address}>`;
 }
 
 function escapeHtml(value: string) {

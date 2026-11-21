@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError || !user || !pendingLicenseHash) {
+  if (userError || !user) {
     if (userError) {
       console.error("Unable to load confirmed signup user.", userError);
     }
@@ -80,6 +80,10 @@ export async function GET(request: NextRequest) {
     }
     clearPendingLicense();
     return redirectTo("/signup?error=license");
+  }
+
+  if (!pendingLicenseHash) {
+    return redirectTo("/dashboard");
   }
 
   const { error: redeemError } = await supabase.rpc("redeem_license", {

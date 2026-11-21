@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { selectBusiness } from "./businesses/actions";
 import { logOut } from "./actions";
 
 const navigation = [
   { href: "/dashboard", label: "Overview", icon: "◫" },
   { href: "/dashboard/requests", label: "Requests", icon: "↗" },
   { href: "/dashboard/plan", label: "Plan & credits", icon: "◇" },
+  { href: "/dashboard/email", label: "Email setup", icon: "✉" },
   { href: "/dashboard/settings", label: "Settings", icon: "⚙" },
 ];
 
@@ -18,20 +20,26 @@ function isActivePath(pathname: string, href: string) {
 
 export default function DashboardShell({
   children,
+  activeBusinessId,
+  businesses,
   businessName,
   fullName,
   planTier,
   creditsRemaining,
 }: {
   children: ReactNode;
+  activeBusinessId: string;
+  businesses: { id: string; business_name: string }[];
   businessName: string;
   fullName: string | null;
   planTier: string | null;
   creditsRemaining: number | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const activePage = navigation.find(({ href }) => isActivePath(pathname, href));
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isSwitchingBusiness, startBusinessSwitch] = useTransition();
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const accountMenuButtonRef = useRef<HTMLButtonElement>(null);
   const accountName = fullName?.trim() || businessName;
@@ -41,6 +49,17 @@ export default function DashboardShell({
     .map((name) => name[0])
     .join("")
     .toUpperCase() || businessName.trim()[0]?.toUpperCase() || "B";
+
+  function changeBusiness(businessId: string) {
+    startBusinessSwitch(async () => {
+      try {
+        await selectBusiness(businessId);
+        router.refresh();
+      } catch (error) {
+        console.error("Unable to switch business location.", error);
+      }
+    });
+  }
 
   useEffect(() => {
     if (!isAccountMenuOpen) return;
@@ -74,10 +93,20 @@ export default function DashboardShell({
           <span className="text-[16px] font-semibold tracking-[-0.04em]">table<span className="text-emerald-400">signal</span></span>
         </Link>
         <p className="px-3 text-[9px] font-semibold uppercase tracking-[0.15em] text-zinc-500">Workspace</p>
-        <div className="mt-3 flex items-center gap-2.5 rounded-[5px] border border-zinc-800 bg-zinc-900/70 px-3 py-3">
-          <span className="flex size-8 items-center justify-center rounded-[4px] bg-emerald-400/10 text-[11px] font-semibold text-emerald-300">{businessName.trim()[0]?.toUpperCase() || "B"}</span>
-          <span className="min-w-0"><span className="block truncate text-[11px] font-medium text-zinc-200">{businessName}</span><span className="mt-0.5 block text-[9px] text-zinc-500">Workspace</span></span>
-        </div>
+        <label className="mt-3 block rounded-[5px] border border-zinc-800 bg-zinc-900/70 px-3 py-3">
+          <span className="mb-1.5 block text-[9px] text-zinc-500">Active location</span>
+          <select
+            aria-label="Select active business location"
+            className="w-full truncate bg-transparent text-[11px] font-medium text-zinc-200 outline-none"
+            disabled={isSwitchingBusiness}
+            onChange={(event) => changeBusiness(event.target.value)}
+            value={activeBusinessId}
+          >
+            {businesses.map((business) => (
+              <option className="bg-zinc-900" key={business.id} value={business.id}>{business.business_name}</option>
+            ))}
+          </select>
+        </label>
         <nav aria-label="Dashboard navigation" className="mt-8 space-y-1 text-[12px]">
           {navigation.map(({ href, icon, label }) => {
             const active = isActivePath(pathname, href);
@@ -112,6 +141,19 @@ export default function DashboardShell({
           </Link>
           <div className="hidden text-[11px] text-zinc-500 lg:block">{businessName} <span className="mx-1 text-zinc-700">/</span> {activePage?.label ?? "Workspace"}</div>
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
+            {businesses.length > 1 && (
+              <select
+                aria-label="Select active business location"
+                className="max-w-32 truncate rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-[10px] text-zinc-200 outline-none focus:border-emerald-400 lg:hidden"
+                disabled={isSwitchingBusiness}
+                onChange={(event) => changeBusiness(event.target.value)}
+                value={activeBusinessId}
+              >
+                {businesses.map((business) => (
+                  <option className="bg-zinc-900" key={business.id} value={business.id}>{business.business_name}</option>
+                ))}
+              </select>
+            )}
             <Link
               aria-label={`Plan & credits: ${planTier
                 ? `${planTier} · ${(creditsRemaining ?? 0).toLocaleString()} email credits`

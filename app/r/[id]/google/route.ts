@@ -34,9 +34,29 @@ export async function GET(
 
   try {
     const supabase = await createClient();
+    const { data: requestData, error: requestError } = await supabase.rpc("get_public_review_request", {
+      p_request_id: id,
+    });
+
+    if (requestError) {
+      console.error("Unable to load public review details before redirect.", requestError);
+      const fallback = new URL(`/r/${id}?rating=${rating}&error=1`, request.url);
+      return NextResponse.redirect(fallback, {
+        status: 302,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
+    const requestResult = Array.isArray(requestData) ? requestData[0] : null;
+    if (!requestResult || typeof requestResult.customer_name !== "string") {
+      return NextResponse.redirect(new URL("/", request.url), 302);
+    }
+
     const { data, error } = await supabase.rpc("submit_public_review_response", {
       p_request_id: id,
       p_rating: rating,
+      p_customer_name: requestResult.customer_name,
+      p_customer_email: null,
       p_feedback: null,
     });
 

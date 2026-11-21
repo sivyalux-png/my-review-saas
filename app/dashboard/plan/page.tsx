@@ -17,7 +17,7 @@ export default async function PlanPage() {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("plan_tier, monthly_credit_limit, credits_remaining")
+    .select("plan_tier")
     .eq("id", userId)
     .maybeSingle();
 

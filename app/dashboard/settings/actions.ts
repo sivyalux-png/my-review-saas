@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getActiveBusiness } from "../../../lib/businesses";
+import { normalizeAppSumoTier } from "../../../lib/entitlements";
 import { createClient } from "../../../lib/supabase/server";
 import type { ReviewSettings } from "./settings-client";
 
@@ -16,6 +18,7 @@ type SaveSettingsResult =
 const fieldLimits = {
   businessName: 120,
   businessCategory: 80,
+  businessLogoUrl: 2048,
   googleReviewLink: 2048,
   privateFeedbackUrl: 2048,
   emailSubject: 200,
@@ -31,7 +34,9 @@ export async function saveReviewSettings(
     Object.entries(fieldLimits).some(([key, maximum]) => {
       const value = settings[key as keyof ReviewSettings];
       return typeof value !== "string" || value.length > maximum;
-    })
+    }) ||
+    typeof settings.smartReviewGating !== "boolean" ||
+    typeof settings.autoFollowUpEnabled !== "boolean"
   ) {
     return { ok: false, message: "One or more settings are invalid or too long." };
   }
@@ -51,6 +56,18 @@ export async function saveReviewSettings(
       }
     } catch {
       return { ok: false, message: "Enter a valid HTTPS Google review URL." };
+    }
+  }
+
+  const businessLogoUrl = settings.businessLogoUrl.trim();
+  if (businessLogoUrl) {
+    try {
+      const url = new URL(businessLogoUrl);
+      if (url.protocol !== "https:") {
+        return { ok: false, message: "Business logo URLs must use HTTPS." };
+      }
+    } catch {
+      return { ok: false, message: "Enter a valid HTTPS business logo URL." };
     }
   }
 
@@ -87,18 +104,38 @@ export async function saveReviewSettings(
   }
 
   const userId = data.claims.sub;
+  const activeBusiness = await getActiveBusiness(supabase, userId);
   const businessCategory = settings.businessCategory.trim();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("plan_tier")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  const tier = normalizeAppSumoTier(profile?.plan_tier);
+  const canUseTierTwoFeatures = tier === "Tier 2" || tier === "Tier 3";
+  if (settings.autoFollowUpEnabled && !canUseTierTwoFeatures) {
+    return { ok: false, message: "Auto follow-up is available on Tier 2 and Tier 3." };
+  }
+  if (businessLogoUrl && !canUseTierTwoFeatures) {
+    return { ok: false, message: "Custom business branding is available on Tier 2 and Tier 3." };
+  }
   const settingsUpdate = {
-    business_name: settings.businessName.trim() || null,
+    business_name: settings.businessName.trim() || "Your business",
     business_category: businessCategory || null,
     google_review_link: googleReviewLink || null,
     private_feedback_url: privateFeedbackUrl || null,
     email_subject: settings.emailSubject,
     email_body: settings.emailBody,
+    smart_review_gating: settings.smartReviewGating,
+    auto_follow_up_enabled: settings.autoFollowUpEnabled,
+    ...(canUseTierTwoFeatures ? { business_logo_url: businessLogoUrl || null } : {}),
   };
   const { data: savedSettings, error } = await supabase
-    .from("settings")
-    .upsert({ ...settingsUpdate, user_id: userId }, { onConflict: "user_id" })
+    .from("businesses")
+    .update(settingsUpdate)
+    .eq("id", activeBusiness.id)
+    .eq("user_id", userId)
     .select("user_id, business_category, google_review_link")
     .single();
 
@@ -124,7 +161,8 @@ export async function saveReviewSettings(
   }
 
   revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/overview");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/requests");
   revalidatePath("/r/[id]", "page");
   return {
     ok: true,

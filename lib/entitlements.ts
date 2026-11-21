@@ -18,18 +18,18 @@ export const appSumoTiers: readonly TierEntitlement[] = [
     name: "Tier 2",
     price: 99,
     emailCredits: 5000,
-    locations: "3 locations",
+    locations: "Up to 5 locations",
   },
   {
     name: "Tier 3",
     price: 189,
     emailCredits: 10000,
-    locations: "10 locations",
+    locations: "Unlimited locations",
   },
 ];
 
 export function normalizeAppSumoTier(value: string | null | undefined): AppSumoTier | null {
-  switch (value?.trim().toLowerCase()) {
+  switch (value?.trim().toLowerCase().replaceAll("_", " ")) {
     case "tier 1":
     case "starter":
       return "Tier 1";

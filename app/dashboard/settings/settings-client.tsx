@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
+import { normalizeAppSumoTier } from "../../../lib/entitlements";
 import { saveReviewSettings } from "./actions";
 
 const businessTypes = [
@@ -38,34 +39,53 @@ function TokenButton({ onClick, token, disabled = false }: { onClick: () => void
 export type ReviewSettings = {
   businessName: string;
   businessCategory: string;
+  businessLogoUrl: string;
   googleReviewLink: string;
   privateFeedbackUrl: string;
   emailSubject: string;
   emailBody: string;
+  smartReviewGating: boolean;
+  autoFollowUpEnabled: boolean;
 };
 
 const defaultSettings: Omit<ReviewSettings, "googleReviewLink"> = {
   businessName: "",
   businessCategory: "",
+  businessLogoUrl: "",
   privateFeedbackUrl: "",
   emailSubject: "A quick favor, {Customer_Name}?",
   emailBody: `Hi {Customer_Name},\n\nThanks for choosing {Business_Name}. If you have a moment, would you share how your visit went? Your feedback helps our team and other people in the community.\n\n${starRatingWidgetToken}\n\nThank you,\nThe {Business_Name} team`,
+  smartReviewGating: true,
+  autoFollowUpEnabled: false,
 };
 
 export default function SettingsClient({
+  businessId,
   initialSettings,
+  planTier,
+  siteOrigin,
 }: {
+  businessId: string;
   initialSettings: Partial<ReviewSettings>;
+  planTier: string | null;
+  siteOrigin: string;
 }) {
   const router = useRouter();
   const [businessName, setBusinessName] = useState(initialSettings.businessName ?? defaultSettings.businessName);
   const [businessCategory, setBusinessCategory] = useState(
     initialSettings.businessCategory || "Other local business",
   );
+  const [businessLogoUrl, setBusinessLogoUrl] = useState(initialSettings.businessLogoUrl ?? "");
   const [googleReviewLink, setGoogleReviewLink] = useState(initialSettings.googleReviewLink ?? "");
   const [privateFeedbackUrl, setPrivateFeedbackUrl] = useState(initialSettings.privateFeedbackUrl ?? defaultSettings.privateFeedbackUrl);
   const [emailSubject, setEmailSubject] = useState(initialSettings.emailSubject ?? defaultSettings.emailSubject);
   const [emailBody, setEmailBody] = useState(initialSettings.emailBody ?? defaultSettings.emailBody);
+  const [smartReviewGating, setSmartReviewGating] = useState(
+    initialSettings.smartReviewGating ?? defaultSettings.smartReviewGating,
+  );
+  const [autoFollowUpEnabled, setAutoFollowUpEnabled] = useState(
+    initialSettings.autoFollowUpEnabled ?? defaultSettings.autoFollowUpEnabled,
+  );
   const [saveMessage, setSaveMessage] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -73,9 +93,16 @@ export default function SettingsClient({
   useEffect(() => {
     // Server refreshes replace these persisted values; synchronize their controlled inputs.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBusinessName(initialSettings.businessName ?? "");
     setBusinessCategory(initialSettings.businessCategory || "Other local business");
+    setBusinessLogoUrl(initialSettings.businessLogoUrl ?? "");
     setGoogleReviewLink(initialSettings.googleReviewLink ?? "");
-  }, [initialSettings.businessCategory, initialSettings.googleReviewLink]);
+    setPrivateFeedbackUrl(initialSettings.privateFeedbackUrl ?? "");
+    setEmailSubject(initialSettings.emailSubject ?? defaultSettings.emailSubject);
+    setEmailBody(initialSettings.emailBody ?? defaultSettings.emailBody);
+    setSmartReviewGating(initialSettings.smartReviewGating ?? true);
+    setAutoFollowUpEnabled(initialSettings.autoFollowUpEnabled ?? false);
+  }, [initialSettings]);
   useEffect(() => {
     if (!qrMessage) return;
     const timeout = window.setTimeout(() => setQrMessage(""), 3000);
@@ -87,6 +114,11 @@ export default function SettingsClient({
   const normalizedBusinessType = businessTypes.some(
     (businessType) => businessType === businessCategory,
   );
+  const normalizedTier = normalizeAppSumoTier(planTier);
+  const canAutoFollowUp = normalizedTier === "Tier 2" || normalizedTier === "Tier 3";
+  const canCustomBrand = canAutoFollowUp;
+  const isTier3 = normalizedTier === "Tier 3";
+  const posterReviewUrl = siteOrigin ? `${siteOrigin}/b/${businessId}` : "";
 
   function appendTag(field: "subject" | "email", tag: string) {
     const append = (value: string) => `${value}${value && !value.endsWith(" ") && !value.endsWith("\n") ? " " : ""}${tag}`;
@@ -104,10 +136,13 @@ export default function SettingsClient({
       const result = await saveReviewSettings({
         businessName,
         businessCategory,
+        businessLogoUrl,
         googleReviewLink,
         privateFeedbackUrl,
         emailSubject,
         emailBody,
+        smartReviewGating,
+        autoFollowUpEnabled,
       });
       if (!result.ok) {
         setSaveMessage(result.message);
@@ -141,13 +176,13 @@ export default function SettingsClient({
   }
 
   async function copyReviewLink() {
-    if (!googleReviewLink.trim()) {
-      setQrMessage("Enter a review link before copying it.");
+    if (!googleReviewLink.trim() || !posterReviewUrl) {
+      setQrMessage("Add your Google link and configure NEXT_PUBLIC_SITE_URL to copy the gated review link.");
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(googleReviewLink.trim());
+      await navigator.clipboard.writeText(posterReviewUrl);
       setQrMessage("Link copied!");
     } catch (error) {
       console.error("Unable to copy the Google review link.", error);
@@ -156,25 +191,50 @@ export default function SettingsClient({
   }
 
   function downloadReviewQr() {
-    const svg = document.getElementById("settings-review-qr")?.querySelector("svg");
-    if (!svg || !googleReviewLink.trim()) {
-      setQrMessage("Enter a review link to generate its QR code.");
+    const qr = document.getElementById("settings-review-qr")?.querySelector("canvas");
+    if (!qr || !posterReviewUrl || !googleReviewLink.trim()) {
+      setQrMessage("Save a Google review link to generate the gated review poster.");
       return;
     }
 
     try {
-      const source = new XMLSerializer().serializeToString(svg);
-      const file = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
-      const fileUrl = URL.createObjectURL(file);
+      const poster = document.createElement("canvas");
+      poster.width = 1600;
+      poster.height = 2200;
+      const context = poster.getContext("2d");
+      if (!context) throw new Error("Poster rendering is unavailable.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, poster.width, poster.height);
+      context.fillStyle = "#151710";
+      context.textAlign = "center";
+      context.font = "600 68px Arial, sans-serif";
+      context.fillText(businessName.trim() || "Your business", 800, 390, 1320);
+      context.fillStyle = "#3e4632";
+      context.font = "500 44px Arial, sans-serif";
+      context.fillText("Scan to Leave Us a Review", 800, 505);
+      const qrSize = 920;
+      context.drawImage(qr, (poster.width - qrSize) / 2, 620, qrSize, qrSize);
+      context.fillStyle = "#e7b648";
+      context.font = "600 88px Arial, sans-serif";
+      context.fillText("★ ★ ★ ★ ★", 800, 1730);
+      context.fillStyle = "#59604c";
+      context.font = "400 34px Arial, sans-serif";
+      context.fillText("Thank you for sharing your experience", 800, 1820);
+      if (!canAutoFollowUp) {
+        context.fillStyle = "#8b8e82";
+        context.font = "400 24px Arial, sans-serif";
+        context.fillText("Powered by TableSignal", 800, 2070);
+      }
+
+      const fileUrl = poster.toDataURL("image/png");
       const anchor = document.createElement("a");
       const safeName = businessName.trim().toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "") || "business";
       anchor.href = fileUrl;
-      anchor.download = `${safeName}-review-qr.svg`;
+      anchor.download = `${safeName}-review-poster.png`;
       anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
-      setQrMessage("Your QR code was downloaded.");
+      setQrMessage("Your high-resolution review poster was downloaded.");
     } catch (error) {
       console.error("Unable to download the review QR code.", error);
       setQrMessage("We couldn't download the QR code. Please try again.");
@@ -210,29 +270,71 @@ export default function SettingsClient({
                       <div><FieldLabel htmlFor="business-name">Business name</FieldLabel><input autoComplete="organization" className={inputClass} id="business-name" maxLength={120} onChange={(event) => { setBusinessName(event.target.value); setSaveMessage(""); }} value={businessName} /></div>
                       <div><FieldLabel htmlFor="business-category">Business type</FieldLabel><select className={inputClass} id="business-category" onChange={(event) => { setBusinessCategory(event.target.value); setSaveMessage(""); }} value={normalizedBusinessType ? businessCategory : businessCategory || "Other local business"}>{businessCategory && !normalizedBusinessType && <option value={businessCategory}>{businessCategory}</option>}{businessTypes.map((businessType) => <option key={businessType} value={businessType}>{businessType}</option>)}</select></div>
                       <div><FieldLabel htmlFor="google-link">Google Business Profile review URL</FieldLabel><input className={inputClass} id="google-link" onChange={(event) => { setGoogleReviewLink(event.target.value); setSaveMessage(""); }} placeholder="https://g.page/r/.../review" type="url" value={googleReviewLink} /></div>
+                      {canCustomBrand && <div className="sm:col-span-2"><FieldLabel htmlFor="business-logo">Business logo URL (optional)</FieldLabel><input className={inputClass} id="business-logo" onChange={(event) => { setBusinessLogoUrl(event.target.value); setSaveMessage(""); }} placeholder="https://yourdomain.com/logo.png" type="url" value={businessLogoUrl} /><p className="mt-1.5 text-[9px] leading-4 text-zinc-600">Used on your customer-facing review page and branded QR materials.</p></div>}
                       <div className="sm:col-span-2"><FieldLabel htmlFor="private-feedback-link">Private feedback form URL</FieldLabel><input className={inputClass} id="private-feedback-link" onChange={(event) => { setPrivateFeedbackUrl(event.target.value); setSaveMessage(""); }} placeholder="https://... or /feedback/private" value={privateFeedbackUrl} /><p className="mt-1.5 text-[9px] leading-4 text-zinc-600">Stars 1–3 send customers here for private follow-up.</p></div>
                     </div>
+                  </section>
+
+                  <section aria-labelledby="gating-heading" className="settings-section rounded-[6px] border border-zinc-800 bg-[#101013] p-4 sm:p-5">
+                    <div className="settings-section-heading mb-4 border-b border-zinc-800 pb-3">
+                      <p className="settings-section-eyebrow settings-section-teal">SMART REVIEW FLOW</p>
+                      <h2 className="mt-2 text-[14px] font-medium" id="gating-heading">Review experience</h2>
+                      <p className="mt-1 text-[10px] leading-5 text-zinc-500">Choose how customers are routed after they rate their visit.</p>
+                    </div>
+                    <label className="flex items-start justify-between gap-5">
+                      <span>
+                        <span className="block text-[11px] font-medium text-zinc-200">Smart Review Gating</span>
+                        <span className="mt-1 block max-w-xl text-[10px] leading-5 text-zinc-500">When enabled, 4–5 stars go to Google and 1–3 stars open a private feedback form.</span>
+                      </span>
+                      <input
+                        aria-label="Enable Smart Review Gating"
+                        checked={smartReviewGating}
+                        className="mt-1 size-4 accent-emerald-400"
+                        onChange={(event) => setSmartReviewGating(event.target.checked)}
+                        type="checkbox"
+                      />
+                    </label>
+                    <label className={`mt-5 flex items-start justify-between gap-5 border-t border-zinc-800 pt-4 ${canAutoFollowUp ? "" : "opacity-60"}`}>
+                      <span>
+                        <span className="block text-[11px] font-medium text-zinc-200">Automatic follow-up reminder</span>
+                        <span className="mt-1 block max-w-xl text-[10px] leading-5 text-zinc-500">
+                          {canAutoFollowUp
+                            ? isTier3
+                              ? "Send polite reminders on day 3 and day 7 if the customer has not opened their review link."
+                              : "Send one polite reminder 3 days later if the customer has not opened their review link."
+                            : "Available on AppSumo Tier 2 and Tier 3."}
+                        </span>
+                      </span>
+                      <input
+                        aria-label="Enable automatic follow-up"
+                        checked={autoFollowUpEnabled}
+                        className="mt-1 size-4 accent-emerald-400"
+                        disabled={!canAutoFollowUp}
+                        onChange={(event) => setAutoFollowUpEnabled(event.target.checked)}
+                        type="checkbox"
+                      />
+                    </label>
                   </section>
 
                   <section aria-labelledby="settings-qr-heading" className="settings-section rounded-[6px] border border-zinc-800 bg-[#101013] p-4 sm:p-5">
                     <div className="settings-section-heading mb-4 border-b border-zinc-800 pb-3">
                       <p className="settings-section-eyebrow settings-section-teal">REVIEW TOOLS</p>
                       <h2 className="mt-2 text-[14px] font-medium" id="settings-qr-heading">Review link &amp; QR code</h2>
-                      <p className="mt-1 text-[10px] leading-5 text-zinc-500">The QR code updates as you edit your Google review link. Save changes to apply the link to customer requests.</p>
+                      <p className="mt-1 text-[10px] leading-5 text-zinc-500">The QR code opens your Smart Review Gating page. Save changes to apply the Google destination to customer reviews.</p>
                     </div>
                     <div className="grid items-center gap-5 sm:grid-cols-[minmax(0,1fr)_176px]">
                       <div>
                         <div className="flex flex-wrap gap-2">
-                          <button className="settings-save inline-flex h-10 items-center gap-2 rounded-[5px] bg-emerald-400 px-4 text-[11px] font-semibold text-[#07110c] transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50" disabled={!googleReviewLink.trim()} onClick={() => void copyReviewLink()} type="button">Copy review link</button>
-                          <button className="inline-flex h-10 items-center gap-2 rounded-[5px] border border-zinc-700 px-4 text-[11px] font-medium text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50" disabled={!googleReviewLink.trim()} onClick={downloadReviewQr} type="button">Download QR as SVG <span aria-hidden="true">↓</span></button>
+                          <button className="settings-save inline-flex h-10 items-center gap-2 rounded-[5px] bg-emerald-400 px-4 text-[11px] font-semibold text-[#07110c] transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50" disabled={!googleReviewLink.trim() || !posterReviewUrl} onClick={() => void copyReviewLink()} type="button">Copy gated review link</button>
+                          <button className="inline-flex h-10 items-center gap-2 rounded-[5px] border border-zinc-700 px-4 text-[11px] font-medium text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50" disabled={!googleReviewLink.trim() || !posterReviewUrl} onClick={downloadReviewQr} type="button">Download printable poster PNG <span aria-hidden="true">↓</span></button>
                         </div>
                         <p aria-live="polite" className="mt-3 min-h-5 text-[10px] leading-5 text-emerald-300" role="status">{qrMessage}</p>
                       </div>
                       <div className="flex flex-col items-center">
                         <div className="flex size-[160px] items-center justify-center rounded-[5px] bg-white p-2" id="settings-review-qr">
-                          {googleReviewLink.trim()
-                            ? <QRCodeSVG bgColor="#ffffff" fgColor="#10110f" level="M" size={144} value={googleReviewLink.trim()} />
-                            : <p className="px-4 text-center text-[10px] text-zinc-500">Add your review link to generate a QR code.</p>}
+                          {googleReviewLink.trim() && posterReviewUrl
+                            ? <><QRCodeSVG bgColor="#ffffff" fgColor="#10110f" level="M" size={144} value={posterReviewUrl} /><div className="hidden"><QRCodeCanvas bgColor="#ffffff" fgColor="#10110f" level="H" size={800} value={posterReviewUrl} /></div></>
+                            : <p className="px-4 text-center text-[10px] text-zinc-500">{!siteOrigin ? "Configure NEXT_PUBLIC_SITE_URL to generate a QR code." : "Add your review link to generate a QR code."}</p>}
                         </div>
                         <p className="mt-3 max-w-[176px] truncate text-[10px] font-medium text-zinc-300">{businessName || "Your business"} · {businessCategory || "Business"}</p>
                       </div>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { resolveBusinessName } from "../../lib/business-name";
+import { getActiveBusiness } from "../../lib/businesses";
+import { createAdminClient } from "../../lib/supabase/admin";
 import { createClient } from "../../lib/supabase/server";
 import OverviewClient from "./overview-client";
 
@@ -16,19 +17,17 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const requests = await getReviewRequests(supabase, userId);
-  const [
-    { data: profile, error: profileError },
-    { data: settings, error: settingsError },
-  ] = await Promise.all([
+  const activeBusiness = await getActiveBusiness(supabase, userId);
+  const [requests, { data: profile, error: profileError }, { data: provider, error: providerError }] = await Promise.all([
+    getReviewRequests(supabase, activeBusiness.id),
     supabase
       .from("profiles")
-      .select("full_name, business_name, plan_tier, monthly_credit_limit, credits_remaining")
+      .select("full_name, business_name, plan_tier, monthly_credit_limit, credits_remaining, system_email_credits_remaining")
       .eq("id", userId)
       .maybeSingle(),
-    supabase
-      .from("settings")
-      .select("business_name, google_review_link")
+    createAdminClient()
+      .from("email_provider_credentials")
+      .select("user_id")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -36,10 +35,8 @@ export default async function DashboardPage() {
   if (profileError) {
     throw profileError;
   }
+  if (providerError) throw providerError;
 
-  if (settingsError) {
-    throw settingsError;
-  }
   const allRequests = requests;
   const sentRequests = allRequests.filter(
     (request) =>
@@ -98,12 +95,13 @@ export default async function DashboardPage() {
 
   return (
     <OverviewClient
-      businessName={resolveBusinessName(settings?.business_name, profile?.business_name)}
-      creditsRemaining={profile?.credits_remaining ?? null}
+      businessName={activeBusiness.business_name}
+      creditsRemaining={(profile?.credits_remaining ?? 0) + (profile?.system_email_credits_remaining ?? 0)}
       fullName={profile?.full_name ?? null}
-      googleReviewLink={settings?.google_review_link ?? null}
-      monthlyCreditLimit={profile?.monthly_credit_limit ?? null}
+      googleReviewLink={activeBusiness.google_review_link}
+      monthlyCreditLimit={(profile?.monthly_credit_limit ?? 0) + 30}
       planTier={profile?.plan_tier ?? null}
+      providerConnected={Boolean(provider)}
       analytics={{
         totalSent: sentRequests.length,
         requestChangePercent,
@@ -138,7 +136,7 @@ export default async function DashboardPage() {
 
 async function getReviewRequests(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
+  businessId: string,
 ) {
   const pageSize = 1000;
   const requests = [];
@@ -146,7 +144,7 @@ async function getReviewRequests(
     const { data, error } = await supabase
       .from("review_requests")
       .select("created_at, status, rating, feedback, customer_name, reviewed_at, id")
-      .eq("user_id", userId)
+      .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);

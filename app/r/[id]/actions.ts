@@ -6,7 +6,7 @@ const requestIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type SubmitRatingResult =
-  | { ok: true; googleReviewUrl: string | null }
+  | { ok: true; googleReviewUrl: string | null; smartReviewGating: boolean }
   | { ok: false; message: string };
 
 function safeGoogleReviewUrl(value: unknown): string | null {
@@ -29,6 +29,8 @@ function safeGoogleReviewUrl(value: unknown): string | null {
 export async function submitPublicReview(
   requestId: string,
   rating: number,
+  customerName: string,
+  customerEmail: string,
   feedback: string,
 ): Promise<SubmitRatingResult> {
   if (
@@ -37,9 +39,13 @@ export async function submitPublicReview(
     !Number.isInteger(rating) ||
     rating < 1 ||
     rating > 5 ||
+    typeof customerName !== "string" ||
+    customerName.trim().length < 1 ||
+    customerName.trim().length > 120 ||
+    typeof customerEmail !== "string" ||
+    customerEmail.trim().length > 254 ||
     typeof feedback !== "string" ||
-    feedback.trim().length > 2000 ||
-    (rating <= 3 && !feedback.trim())
+    feedback.trim().length > 2000
   ) {
     return { ok: false, message: "Please enter a rating and valid feedback before submitting." };
   }
@@ -55,6 +61,8 @@ export async function submitPublicReview(
   const { data, error } = await supabase.rpc("submit_public_review_response", {
     p_request_id: requestId,
     p_rating: rating,
+    p_customer_name: customerName.trim(),
+    p_customer_email: customerEmail.trim() || null,
     p_feedback: feedback.trim() || null,
   });
 
@@ -71,7 +79,11 @@ export async function submitPublicReview(
   }
 
   const result = Array.isArray(data) ? data[0] : null;
-  if (!result || (result.google_review_url !== null && typeof result.google_review_url !== "string")) {
+  if (
+    !result ||
+    (result.google_review_url !== null && typeof result.google_review_url !== "string") ||
+    typeof result.smart_review_gating !== "boolean"
+  ) {
     console.error("Public review submission returned an invalid result.", data);
     return {
       ok: false,
@@ -82,5 +94,6 @@ export async function submitPublicReview(
   return {
     ok: true,
     googleReviewUrl: safeGoogleReviewUrl(result.google_review_url),
+    smartReviewGating: result.smart_review_gating,
   };
 }

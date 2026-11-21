@@ -26,9 +26,8 @@ export async function signUp(
   const businessName = String(formData.get("business") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const licenseKey = normalizeLicenseKey(
-    String(formData.get("licenseCode") ?? ""),
-  );
+  const submittedLicenseKey = String(formData.get("licenseCode") ?? "").trim();
+  const licenseKey = normalizeLicenseKey(submittedLicenseKey);
 
   if (
     fullName.length < 1 ||
@@ -38,41 +37,44 @@ export async function signUp(
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     password.length < 8 ||
     Buffer.byteLength(password, "utf8") > 72 ||
-    !licenseKeyPattern.test(licenseKey)
+    (submittedLicenseKey.length > 0 && !licenseKeyPattern.test(licenseKey))
   ) {
-    return { error: "Check your details and enter a valid license key." };
+    return { error: "Check your details and enter a valid license key if you have one." };
   }
 
-  let licenseHashes: string[];
+  let licenseHashes: string[] = [];
   let admin: ReturnType<typeof createAdminClient>;
-  try {
-    licenseHashes = getLicenseKeyHashes(licenseKey);
-    admin = createAdminClient();
-  } catch (error) {
-    console.error("Signup license service is not configured.", error);
-    return { error: "Signup is not configured correctly. Please contact support." };
-  }
-  const { data: license, error: licenseLookupError } = await admin
-    .from("licenses")
-    .select("key_hash, expires_at")
-    .in("key_hash", licenseHashes)
-    .eq("status", "available")
-    .maybeSingle();
+  if (licenseKey) {
+    try {
+      licenseHashes = getLicenseKeyHashes(licenseKey);
+      admin = createAdminClient();
+    } catch (error) {
+      console.error("Signup license service is not configured.", error);
+      return { error: "Signup is not configured correctly. Please contact support." };
+    }
+    const { data: license, error: licenseLookupError } = await admin
+      .from("licenses")
+      .select("key_hash, expires_at")
+      .in("key_hash", licenseHashes)
+      .eq("status", "available")
+      .maybeSingle();
 
-  if (licenseLookupError) {
-    console.error("Unable to look up signup license.", licenseLookupError);
-    return { error: "We couldn't verify your license right now. Please try again." };
+    if (licenseLookupError) {
+      console.error("Unable to look up signup license.", licenseLookupError);
+      return { error: "We couldn't verify your license right now. Please try again." };
+    }
+
+    if (
+      !license ||
+      (license.expires_at !== null &&
+        new Date(license.expires_at).getTime() <= Date.now())
+    ) {
+      return { error: "This license key is invalid, expired, or already redeemed." };
+    }
+    licenseHashes = [license.key_hash];
   }
 
-  if (
-    !license ||
-    (license.expires_at !== null &&
-      new Date(license.expires_at).getTime() <= Date.now())
-  ) {
-    return { error: "This license key is invalid, expired, or already redeemed." };
-  }
-
-  const licenseHash = license.key_hash;
+  const licenseHash = licenseHashes[0];
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let callbackUrl: string;
 
@@ -131,40 +133,49 @@ export async function signUp(
   }
 
   if (data.session) {
-    const { error: redeemError } = await supabase.rpc("redeem_license", {
-      p_key_hash: licenseHash,
-    });
+    if (licenseHash) {
+      const { error: redeemError } = await supabase.rpc("redeem_license", {
+        p_key_hash: licenseHash,
+      });
 
-    if (redeemError) {
-      console.error("Unable to redeem signup license.", redeemError);
-      const { error: signOutError } = await supabase.auth.signOut();
-      if (signOutError) {
-        console.error("Unable to sign out after license redemption failed.", signOutError);
+      if (redeemError) {
+        console.error("Unable to redeem signup license.", redeemError);
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) {
+          console.error("Unable to sign out after license redemption failed.", signOutError);
+        }
+        try {
+          const admin = createAdminClient();
+          const { error: deleteUserError } = await admin.auth.admin.deleteUser(data.user.id);
+          if (deleteUserError) {
+            console.error("Unable to remove signup after license redemption failed.", deleteUserError);
+          }
+        } catch (error) {
+          console.error("Unable to configure cleanup after license redemption failed.", error);
+        }
+        return {
+          error: "Your account was created, but this license could not be activated. Please contact support.",
+        };
       }
-      const { error: deleteUserError } = await admin.auth.admin.deleteUser(
-        data.user.id,
-      );
-      if (deleteUserError) {
-        console.error("Unable to remove signup after license redemption failed.", deleteUserError);
-      }
-      return {
-        error: "Your account was created, but this license could not be activated. Please contact support.",
-      };
     }
 
     redirect("/dashboard");
   }
 
-  cookieStore.set(pendingLicenseCookieName, licenseHash, {
-    httpOnly: true,
-    maxAge: 60 * 60 * 24,
-    path: "/",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
+  if (licenseHash) {
+    cookieStore.set(pendingLicenseCookieName, licenseHash, {
+      httpOnly: true,
+      maxAge: 60 * 60 * 24,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
 
   return {
     notice:
-      "Check your email and open the confirmation link in this browser within 24 hours. Your license activates when you confirm.",
+      licenseHash
+        ? "Check your email and open the confirmation link in this browser within 24 hours. Your license activates when you confirm."
+        : "Check your email and open the confirmation link in this browser to finish creating your account. Your 30 free system emails will be ready when you sign in.",
   };
 }
